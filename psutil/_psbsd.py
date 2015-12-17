@@ -90,6 +90,9 @@ pmmap_grouped = namedtuple(
     'pmmap_grouped', 'path rss, private, ref_count, shadow_count')
 pmmap_ext = namedtuple(
     'pmmap_ext', 'addr, perms path rss, private, ref_count, shadow_count')
+ssysinfo = namedtuple(
+    'ssysinfo', ['max_files', 'max_procs', 'max_pid', 'files'])
+
 
 # set later from __init__.py
 NoSuchProcess = None
@@ -271,6 +274,11 @@ def net_if_stats():
             duplex = _common.NicDuplex(duplex)
         ret[name] = _common.snicstats(isup, duplex, speed, mtu)
     return ret
+
+
+def sysinfo():
+    maxfiles, maxprocs, maxpid, files = cext.sysinfo()
+    return ssysinfo(maxfiles, maxprocs, maxpid, files)
 
 
 if OPENBSD:

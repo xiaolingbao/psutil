@@ -249,6 +249,19 @@ class FreeBSDSpecificTestCase(unittest.TestCase):
         self.assertAlmostEqual(psutil.virtual_memory().buffers, num,
                                delta=MEMORY_TOLERANCE)
 
+    def test_sysinfo_max_files(self):
+        self.assertEqual(psutil.sysinfo().max_files, sysctl("kern.maxfiles"))
+
+    def test_sysinfo_max_procs(self):
+        self.assertEqual(psutil.sysinfo().max_procs, sysctl("kern.maxproc"))
+
+    def test_sysinfo_max_pid(self):
+        self.assertEqual(psutil.sysinfo().max_files, sysctl("kern.maxfiles"))
+
+    def test_sysinfo_files(self):
+        self.assertAlmostEqual(
+            psutil.sysinfo().files, sysctl("kern.openfiles"), delta=10)
+
 
 def main():
     test_suite = unittest.TestSuite()

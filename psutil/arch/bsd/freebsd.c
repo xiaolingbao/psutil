@@ -974,3 +974,29 @@ error:
         Py_DECREF(py_cpu_seq);
     return NULL;
 }
+
+
+PyObject *
+psutil_sysinfo(PyObject *self, PyObject *args) {
+    int maxfiles;
+    int maxprocs;
+    int maxpid;
+    int openfiles;
+    size_t size_int = sizeof(maxfiles);
+
+    if (sysctlbyname("kern.maxfiles", &maxfiles, &size_int, NULL, 0))
+        goto error;
+    if (sysctlbyname("kern.maxproc", &maxprocs, &size_int, NULL, 0))
+        goto error;
+    if (sysctlbyname("kern.pid_max", &maxpid, &size_int, NULL, 0))
+        goto error;
+    if (sysctlbyname("kern.openfiles", &openfiles, &size_int, NULL, 0))
+        goto error;
+
+    return Py_BuildValue("iiii", maxfiles, maxprocs, maxpid, openfiles);
+
+error:
+    PyErr_SetFromErrno(PyExc_OSError);
+    return NULL;
+
+}

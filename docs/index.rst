@@ -521,6 +521,31 @@ Other system info
      >>> datetime.datetime.fromtimestamp(psutil.boot_time()).strftime("%Y-%m-%d %H:%M:%S")
      '2014-01-12 22:51:00'
 
+.. function:: sysinfo()
+
+  Return various system-wide information as a namedtuple whose fields change
+  depending on the platform.
+
+  - procs_running (Linux)
+  - procs_blocked (Linux)
+  - ctx_switches (Linux)
+  - files (Linux, FreeBSD)
+  - max_threads  (Linux)
+  - max_files  (Linux, FreeBSD)
+  - max_pid  (Linux, FreeBSD)
+  - max_procs (FreeBSD)
+
+  Example (Linux):
+
+  .. code-block:: python
+
+     >>> import psutil
+     >>> psutil.sysinfo()
+     ssysinfo(procs_running=4, procs_blocked=0, ctx_switches=98242, files=5056, max_files=1001723, max_threads=157492, max_pid=32768)
+
+  .. versionadded:: 3.4.0
+
+
 Processes
 =========
 

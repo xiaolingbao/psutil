@@ -220,6 +220,10 @@ pmmap_grouped = namedtuple(
 pmmap_ext = namedtuple(
     'pmmap_ext', 'addr perms ' + ' '.join(pmmap_grouped._fields))
 
+ssysinfo = namedtuple(
+    'ssysinfo', ['procs_running', 'procs_blocked', 'ctx_switches',
+                 'files', 'max_files', 'max_threads', 'max_pid'])
+
 
 # --- system memory
 
@@ -400,11 +404,6 @@ def boot_time():
                 return ret
         raise RuntimeError(
             "line 'btime' not found in %s/stat" % get_procfs_path())
-
-
-ssysinfo = namedtuple(
-    'ssysinfo', ['procs_running', 'procs_blocked', 'ctx_switches',
-                 'files', 'max_files', 'max_threads', 'max_pid'])
 
 
 def sysinfo():

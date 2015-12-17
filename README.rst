@@ -185,6 +185,9 @@ Other system info
     >>> psutil.boot_time()
     1365519115.0
     >>>
+    >>> psutil.sysinfo()
+    ssysinfo(procs_running=4, procs_blocked=0, ctx_switches=98242, files=5056, max_files=1001723, max_threads=157492, max_pid=32768)
+
 
 Process management
 ==================
