@@ -668,6 +668,23 @@ class TestSystemAPIs(unittest.TestCase):
         self.assertGreater(bt, 0)
         self.assertLess(bt, time.time())
 
+    def test_sysinfo(self):
+        res = psutil.sysinfo()
+        if hasattr(res, 'procs_running'):
+            self.assertGreaterEqual(res.procs_running, 0)
+        if hasattr(res, 'procs_blocked'):
+            self.assertGreaterEqual(res.procs_blocked, 0)
+        if hasattr(res, 'ctx_switches'):
+            self.assertGreater(res.ctx_switches, 0)
+        if hasattr(res, 'files'):
+            self.assertGreater(res.files, 0)
+        if hasattr(res, 'max_files'):
+            self.assertGreater(res.max_files, 0)
+        if hasattr(res, 'max_threads'):
+            self.assertGreater(res.max_threads, 0)
+        if hasattr(res, 'max_pid'):
+            self.assertGreater(res.max_pid, 0)
+
     @unittest.skipUnless(POSIX, 'posix only')
     def test_PAGESIZE(self):
         # pagesize is used internally to perform different calculations

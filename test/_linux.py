@@ -84,6 +84,15 @@ def get_mac_address(ifname):
         return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
 
 
+def sysctl(arg):
+    out = sh("sysctl %s" % arg)
+    res = out.split('=')[1]
+    try:
+        return int(res)
+    except ValueError:
+        return res
+
+
 @unittest.skipUnless(LINUX, "not a Linux system")
 class LinuxSpecificTestCase(unittest.TestCase):
 
@@ -510,6 +519,13 @@ class LinuxSpecificTestCase(unittest.TestCase):
                         return_value='/home/foo (deleted)'):
             self.assertEqual(psutil.Process().exe(), "/home/foo")
             self.assertEqual(psutil.Process().cwd(), "/home/foo")
+
+    def test_sysinfo_max_pid(self):
+        self.assertEqual(psutil.sysinfo().max_pid, sysctl("kernel.pid_max"))
+
+    def test_sysinfo_max_threads(self):
+        self.assertEqual(psutil.sysinfo().max_threads,
+                         sysctl("kernel.threads-max"))
 
 
 def main():

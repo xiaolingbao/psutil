@@ -1894,6 +1894,13 @@ def users():
     return _psplatform.users()
 
 
+def sysinfo():
+    """Return various system-wide information as a namedtuple whose
+    fields change depending on the platform.
+    """
+    return _psplatform.sysinfo()
+
+
 def test():  # pragma: no cover
     """List info of all currently running processes emulating ps aux
     output.

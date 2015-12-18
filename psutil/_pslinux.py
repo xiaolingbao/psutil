@@ -402,6 +402,41 @@ def boot_time():
             "line 'btime' not found in %s/stat" % get_procfs_path())
 
 
+ssysinfo = namedtuple(
+    'ssysinfo', ['procs_running', 'procs_blocked', 'ctx_switches',
+                 'files', 'max_files', 'max_threads', 'max_pid'])
+
+
+def sysinfo():
+    """Generic system info."""
+    procfs = get_procfs_path()
+    with open_binary('%s/sys/fs/file-nr' % procfs) as f:
+        data = f.read()
+    files, _, max_files = data.split()
+    files = int(files)
+    max_files = int(max_files)
+    with open_binary('%s/sys/kernel/threads-max' % procfs) as f:
+        max_threads = int(f.read())
+    with open_binary('%s/sys/kernel/pid_max' % procfs) as f:
+        max_pid = int(f.read())
+    with open_binary('%s/stat' % procfs) as f:
+        ctx_switches = None
+        procs_running = None
+        procs_blocked = None
+        for line in f:
+            if line.startswith(b'ctxt'):
+                ctx_switches = int(line.split()[1])
+            elif line.startswith(b'procs_running'):
+                procs_running = int(line.split()[1])
+            elif line.startswith(b'procs_blocked'):
+                procs_blocked = int(line.split()[1])
+            if ctx_switches is not None and procs_running is not None and \
+                    procs_blocked is not None:
+                break
+    return ssysinfo(procs_running, procs_blocked, ctx_switches, files,
+                    max_files, max_threads, max_pid)
+
+
 # --- processes
 
 def pids():
