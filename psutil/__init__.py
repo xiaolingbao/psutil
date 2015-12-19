@@ -159,7 +159,7 @@ __all__ = [
     "net_io_counters", "net_connections", "net_if_addrs",           # network
     "net_if_stats",
     "disk_io_counters", "disk_partitions", "disk_usage",            # disk
-    "users", "boot_time",                                           # others
+    "users", "boot_time", "sysinfo",                                # others
 ]
 __all__.extend(_psplatform.__extra__all__)
 __author__ = "Giampaolo Rodola'"
