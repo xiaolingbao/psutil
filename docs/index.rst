@@ -526,14 +526,14 @@ Other system info
   Return various system-wide information as a namedtuple whose fields change
   depending on the platform.
 
-  - procs_running (Linux)
-  - procs_blocked (Linux)
-  - ctx_switches (Linux)
-  - files (Linux, FreeBSD)
-  - max_threads  (Linux)
-  - max_files  (Linux, FreeBSD)
-  - max_pid  (Linux, FreeBSD)
-  - max_procs (FreeBSD)
+  - **procs_running** (Linux): current number of actively running processes
+  - **procs_blocked** (Linux): current number of processes waiting for I/O
+  - **ctx_switches** (Linux): number of system-wide context switches (voluntary and involuntary) since boot (cumulative, always increasing)
+  - **files** (Linux, FreeBSD): number of system-wide open file descriptors (regular files, sockets, etc.)
+  - **max_threads**  (Linux): maximum number of threads which can be run, system-wide
+  - **max_files**  (Linux, FreeBSD): maximum number of files which can be opened, system-wide
+  - **max_pid**  (Linux, FreeBSD): the highest possible PID number
+  - **max_procs** (FreeBSD): maximum number of processes which can be run, system-wide
 
   Example (Linux):
 
