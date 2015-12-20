@@ -222,7 +222,7 @@ pmmap_ext = namedtuple(
 
 ssysinfo = namedtuple(
     'ssysinfo', ['procs_running', 'procs_blocked', 'ctx_switches',
-                 'files', 'max_files', 'max_threads', 'max_pid'])
+                 'open_files', 'max_files', 'max_threads', 'max_pid'])
 
 
 # --- system memory

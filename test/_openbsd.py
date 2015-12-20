@@ -104,6 +104,23 @@ class OpenBSDSpecificTestCase(unittest.TestCase):
         num = sysctl('hw.physmem')
         self.assertEqual(num, psutil.virtual_memory().total)
 
+    def test_sysctl_max_files(self):
+        self.assertEqual(psutil.sysinfo().max_files, sysctl('kern.maxfiles'))
+
+    def test_sysctl_max_procs(self):
+        self.assertEqual(psutil.sysinfo().max_procs, sysctl('kern.maxproc'))
+
+    def test_sysctl_max_threads(self):
+        self.assertEqual(psutil.sysinfo().max_threads, sysctl('kern.maxthread'))
+
+    def test_sysctl_open_files(self):
+        self.assertAlmostEqual(
+            psutil.sysinfo().open_files, sysctl('kern.nfiles'), delta=4)
+
+    def test_sysctl_num_threads(self):
+        self.assertAlmostEqual(
+            psutil.sysinfo().num_threads, sysctl('kern.nthreads'), delta=2)
+
 
 def main():
     test_suite = unittest.TestSuite()

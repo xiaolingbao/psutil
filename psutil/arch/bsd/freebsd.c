@@ -998,5 +998,4 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
 error:
     PyErr_SetFromErrno(PyExc_OSError);
     return NULL;
-
 }

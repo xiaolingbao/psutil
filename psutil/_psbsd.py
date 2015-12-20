@@ -90,9 +90,13 @@ pmmap_grouped = namedtuple(
     'pmmap_grouped', 'path rss, private, ref_count, shadow_count')
 pmmap_ext = namedtuple(
     'pmmap_ext', 'addr, perms path rss, private, ref_count, shadow_count')
-ssysinfo = namedtuple(
-    'ssysinfo', ['max_files', 'max_procs', 'max_pid', 'files'])
-
+if FREEBSD:
+    ssysinfo = namedtuple(
+        'ssysinfo', ['max_files', 'max_procs', 'max_pid', 'open_files'])
+elif OPENBSD:
+    ssysinfo = namedtuple(
+        'ssysinfo', ['max_files', 'max_procs', 'max_threads', 'open_files',
+                     'num_threads'])
 
 # set later from __init__.py
 NoSuchProcess = None
@@ -163,7 +167,7 @@ if OPENBSD:
     def cpu_count_physical():
         # OpenBSD does not implement this.
         return 1 if cpu_count_logical() == 1 else None
-else:
+elif FREEBSD:
     def cpu_count_physical():
         """Return the number of physical CPUs in the system."""
         # From the C module we'll get an XML string similar to this:
@@ -277,8 +281,14 @@ def net_if_stats():
 
 
 def sysinfo():
-    maxfiles, maxprocs, maxpid, files = cext.sysinfo()
-    return ssysinfo(maxfiles, maxprocs, maxpid, files)
+    if FREEBSD:
+        maxfiles, maxprocs, maxpid, files = cext.sysinfo()
+        return ssysinfo(maxfiles, maxprocs, maxpid, files)
+    elif OPENBSD:
+        maxfiles, maxprocs, maxthreads, nfiles, nthreads = cext.sysinfo()
+        return ssysinfo(maxfiles, maxprocs, maxthreads, nfiles, nthreads)
+    else:
+        raise RuntimeError("unknown platform")  # pragma: no cover
 
 
 if OPENBSD:
@@ -290,7 +300,7 @@ if OPENBSD:
             return pid in pids()
         else:
             return True
-else:
+elif FREEBSD:
     pid_exists = _psposix.pid_exists
 
 
@@ -341,9 +351,11 @@ class Process(object):
 
     @wrap_exceptions
     def exe(self):
-        if FREEBSD:
+        if hasattr(cext, "proc_exe"):
+            # FreeBSD
             return cext.proc_exe(self.pid)
         else:
+            # OpenBSD:
             # exe cannot be determined on OpenBSD; references:
             # https://chromium.googlesource.com/chromium/src/base/+/
             #     master/base_paths_posix.cc

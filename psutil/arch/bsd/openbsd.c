@@ -786,3 +786,52 @@ error:
     return NULL;
 }
 
+
+PyObject *
+psutil_sysinfo(PyObject *self, PyObject *args) {
+    int maxfiles, maxprocs, maxthreads, nfiles, nthreads;
+    int mib[2];
+    size_t len;
+
+    // max open files
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_MAXFILES;
+    len = sizeof(maxfiles);
+    if (sysctl(&mib, 2, &maxfiles, &len, NULL, 0) == -1)
+        goto error;
+
+    // max processes
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_MAXPROC;
+    len = sizeof(maxprocs);
+    if (sysctl(&mib, 2, &maxprocs, &len, NULL, 0) == -1)
+        goto error;
+
+    // max threads
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_MAXTHREAD;
+    len = sizeof(maxprocs);
+    if (sysctl(&mib, 2, &maxthreads, &len, NULL, 0) == -1)
+        goto error;
+
+    // open files
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_NFILES;
+    len = sizeof(nfiles);
+    if (sysctl(&mib, 2, &nfiles, &len, NULL, 0) == -1)
+        goto error;
+
+    // num running threads
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_NTHREADS;
+    len = sizeof(nfiles);
+    if (sysctl(&mib, 2, &nthreads, &len, NULL, 0) == -1)
+        goto error;
+
+    return Py_BuildValue(
+        "iiiii", maxfiles, maxprocs, maxthreads, nfiles, nthreads);
+
+error:
+    PyErr_SetFromErrno(PyExc_OSError);
+    return NULL;
+}

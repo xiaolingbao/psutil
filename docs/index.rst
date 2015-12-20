@@ -526,14 +526,35 @@ Other system info
   Return various system-wide information as a namedtuple whose fields change
   depending on the platform.
 
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | Linux         |  OSX    | Windows | BSD   | SunOS | FreeBSD    | OpenBSD     |
+     +===============+=========+=========+=======+=======+============+=============+
+     | procs_running |         |         |       |       | max_files  | max_files   |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | procs_blocked |         |         |       |       | max_procs  | max_procs   |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | ctx_switches  |         |         |       |       | max_pid    | max_threads |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | open_files    |         |         |       |       | open_files | open_files  |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | max_threads   |         |         |       |       |            | num_threads |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | max_files     |         |         |       |       |            |             |
+     +--------+------+---------+---------+-------+-------+------------+-------------+
+     | max_pid       |         |         |       |       |            |             |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+     | max_procs     |         |         |       |       |            |             |
+     +---------------+---------+---------+-------+-------+------------+-------------+
+
   - **procs_running** (Linux): current number of actively running processes
   - **procs_blocked** (Linux): current number of processes waiting for I/O
   - **ctx_switches** (Linux): number of system-wide context switches (voluntary and involuntary) since boot (cumulative, always increasing)
-  - **files** (Linux, FreeBSD): number of system-wide open file descriptors (regular files, sockets, etc.)
+  - **open_files** (Linux, FreeBSD): total number of opened file descriptors (regular files, sockets, etc.), system-wide
   - **max_threads**  (Linux): maximum number of threads which can be run, system-wide
   - **max_files**  (Linux, FreeBSD): maximum number of files which can be opened, system-wide
   - **max_pid**  (Linux, FreeBSD): the highest possible PID number
   - **max_procs** (FreeBSD): maximum number of processes which can be run, system-wide
+  - **num_threads** (OpenBSD): total number of running threads, system-wide
 
   Example (Linux):
 

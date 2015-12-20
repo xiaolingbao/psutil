@@ -684,14 +684,16 @@ class TestSystemAPIs(unittest.TestCase):
             self.assertGreaterEqual(res.procs_blocked, 0)
         if hasattr(res, 'ctx_switches'):
             self.assertGreater(res.ctx_switches, 0)
-        if hasattr(res, 'files'):
-            self.assertGreater(res.files, 0)
+        if hasattr(res, 'open_files'):
+            self.assertGreater(res.open_files, 0)
         if hasattr(res, 'max_files'):
             self.assertGreater(res.max_files, 0)
         if hasattr(res, 'max_threads'):
             self.assertGreater(res.max_threads, 0)
         if hasattr(res, 'max_pid'):
             self.assertGreater(res.max_pid, 0)
+        if hasattr(res, 'num_threads'):
+            self.assertGreater(res.num_threads, 0)
 
     @unittest.skipUnless(POSIX, 'posix only')
     def test_PAGESIZE(self):

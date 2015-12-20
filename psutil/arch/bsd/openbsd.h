@@ -25,4 +25,5 @@ PyObject *psutil_proc_num_fds(PyObject *self, PyObject *args);
 PyObject *psutil_proc_cwd(PyObject *self, PyObject *args);
 PyObject *psutil_proc_connections(PyObject *self, PyObject *args);
 PyObject *psutil_per_cpu_times(PyObject *self, PyObject *args);
-PyObject* psutil_disk_io_counters(PyObject* self, PyObject* args);
+PyObject *psutil_disk_io_counters(PyObject* self, PyObject* args);
+PyObject *psutil_sysinfo(PyObject* self, PyObject* args);
