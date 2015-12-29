@@ -694,6 +694,8 @@ class TestSystemAPIs(unittest.TestCase):
             self.assertGreater(res.max_pid, 0)
         if hasattr(res, 'num_threads'):
             self.assertGreater(res.num_threads, 0)
+        if hasattr(res, 'interrupts'):
+            self.assertGreater(res.interrupts, 0)
 
     @unittest.skipUnless(POSIX, 'posix only')
     def test_PAGESIZE(self):

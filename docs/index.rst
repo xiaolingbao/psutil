@@ -537,7 +537,9 @@ Other system info
      +---------------+---------+---------+-------+-------+------------+-------------+
      | open_files    |         |         |       |       | open_files | open_files  |
      +---------------+---------+---------+-------+-------+------------+-------------+
-     | max_threads   |         |         |       |       |            | num_threads |
+     | interrupts    |         |         |       |       |            | num_threads |
+     +--------+------+---------+---------+-------+-------+------------+-------------+
+     | max_threads   |         |         |       |       |            |             |
      +---------------+---------+---------+-------+-------+------------+-------------+
      | max_files     |         |         |       |       |            |             |
      +--------+------+---------+---------+-------+-------+------------+-------------+
@@ -550,6 +552,7 @@ Other system info
   - **procs_blocked** (Linux): current number of processes waiting for I/O
   - **ctx_switches** (Linux): number of system-wide context switches (voluntary and involuntary) since boot (cumulative, always increasing)
   - **open_files** (Linux, FreeBSD): total number of opened file descriptors (regular files, sockets, etc.), system-wide
+  - **interrupts** (Linux): number of total system-wide interrupts since boot (cumulative, always increasing)
   - **max_threads**  (Linux): maximum number of threads which can be run, system-wide
   - **max_files**  (Linux, FreeBSD): maximum number of files which can be opened, system-wide
   - **max_pid**  (Linux, FreeBSD): the highest possible PID number

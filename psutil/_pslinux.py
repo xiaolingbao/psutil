@@ -222,7 +222,8 @@ pmmap_ext = namedtuple(
 
 ssysinfo = namedtuple(
     'ssysinfo', ['procs_running', 'procs_blocked', 'ctx_switches',
-                 'open_files', 'max_files', 'max_threads', 'max_pid'])
+                 'open_files', 'interrupts', 'max_files', 'max_threads',
+                 'max_pid'])
 
 
 # --- system memory
@@ -422,6 +423,7 @@ def sysinfo():
         ctx_switches = None
         procs_running = None
         procs_blocked = None
+        interrupts = None
         for line in f:
             if line.startswith(b'ctxt'):
                 ctx_switches = int(line.split()[1])
@@ -429,11 +431,13 @@ def sysinfo():
                 procs_running = int(line.split()[1])
             elif line.startswith(b'procs_blocked'):
                 procs_blocked = int(line.split()[1])
+            elif line.startswith(b'intr'):
+                interrupts = int(line.split()[1])
             if ctx_switches is not None and procs_running is not None and \
-                    procs_blocked is not None:
+                    procs_blocked is not None and interrupts is not None:
                 break
     return ssysinfo(procs_running, procs_blocked, ctx_switches, files,
-                    max_files, max_threads, max_pid)
+                    interrupts, max_files, max_threads, max_pid)
 
 
 # --- processes
