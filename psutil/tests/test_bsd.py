@@ -334,20 +334,6 @@ class OpenBSDSpecificTestCase(unittest.TestCase):
 @unittest.skipUnless(NETBSD, "not a NetBSD system")
 class NetBSDSpecificTestCase(unittest.TestCase):
 
-    def test_sysctl_max_files(self):
-        self.assertEqual(psutil.sysinfo().max_files, sysctl('kern.maxfiles'))
-
-    def test_sysctl_max_procs(self):
-        self.assertEqual(psutil.sysinfo().max_procs, sysctl('kern.maxproc'))
-
-
-# =====================================================================
-# --- NetBSD
-# =====================================================================
-
-@unittest.skipUnless(NETBSD, "not a NetBSD system")
-class NetBSDSpecificTestCase(unittest.TestCase):
-
     def parse_meminfo(self, look_for):
         with open('/proc/meminfo', 'rb') as f:
             for line in f:
@@ -380,6 +366,13 @@ class NetBSDSpecificTestCase(unittest.TestCase):
     def test_swapmem_free(self):
         self.assertEqual(
             psutil.swap_memory().free, self.parse_meminfo("SwapFree:"))
+
+    def test_sysctl_max_files(self):
+        self.assertEqual(psutil.sysinfo().max_files, sysctl('kern.maxfiles'))
+
+    def test_sysctl_max_procs(self):
+        self.assertEqual(psutil.sysinfo().max_procs, sysctl('kern.maxproc'))
+
 
 if __name__ == '__main__':
     run_test_module_by_name(__file__)
