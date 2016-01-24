@@ -299,7 +299,6 @@ class FreeBSDSpecificTestCase(unittest.TestCase):
 # --- OpenBSD
 # =====================================================================
 
-
 @unittest.skipUnless(OPENBSD, "not an OpenBSD system")
 class OpenBSDSpecificTestCase(unittest.TestCase):
 
@@ -326,6 +325,20 @@ class OpenBSDSpecificTestCase(unittest.TestCase):
     def test_sysctl_num_threads(self):
         self.assertAlmostEqual(
             psutil.sysinfo().num_threads, sysctl('kern.nthreads'), delta=2)
+
+
+# =====================================================================
+# --- NetBSD
+# =====================================================================
+
+@unittest.skipUnless(NETBSD, "not a NetBSD system")
+class NetBSDSpecificTestCase(unittest.TestCase):
+
+    def test_sysctl_max_files(self):
+        self.assertEqual(psutil.sysinfo().max_files, sysctl('kern.maxfiles'))
+
+    def test_sysctl_max_procs(self):
+        self.assertEqual(psutil.sysinfo().max_procs, sysctl('kern.maxproc'))
 
 
 if __name__ == '__main__':

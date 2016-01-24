@@ -18,12 +18,13 @@ int psutil_pid_exists(pid_t pid);
 int psutil_raise_ad_or_nsp(long pid);
 
 //
-PyObject *psutil_proc_threads(PyObject *self, PyObject *args);
-PyObject *psutil_virtual_mem(PyObject *self, PyObject *args);
-PyObject *psutil_swap_mem(PyObject *self, PyObject *args);
-PyObject *psutil_proc_num_fds(PyObject *self, PyObject *args);
-PyObject *psutil_proc_connections(PyObject *self, PyObject *args);
+PyObject *psutil_disk_io_counters(PyObject* self, PyObject* args);
 PyObject *psutil_per_cpu_times(PyObject *self, PyObject *args);
-PyObject* psutil_disk_io_counters(PyObject* self, PyObject* args);
-PyObject* psutil_proc_exe(PyObject* self, PyObject* args);
-PyObject* psutil_proc_num_threads(PyObject* self, PyObject* args);
+PyObject *psutil_proc_connections(PyObject *self, PyObject *args);
+PyObject *psutil_proc_exe(PyObject* self, PyObject* args);
+PyObject *psutil_proc_num_fds(PyObject *self, PyObject *args);
+PyObject *psutil_proc_num_threads(PyObject* self, PyObject* args);
+PyObject *psutil_proc_threads(PyObject *self, PyObject *args);
+PyObject *psutil_swap_mem(PyObject *self, PyObject *args);
+PyObject *psutil_sysinfo(PyObject* self, PyObject* args);
+PyObject *psutil_virtual_mem(PyObject *self, PyObject *args);

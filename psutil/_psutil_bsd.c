@@ -1018,11 +1018,8 @@ PsutilMethods[] = {
      "Return a Python dict of tuples for disk I/O information"},
     {"users", psutil_users, METH_VARARGS,
      "Return currently connected users as a list of tuples"},
-// TODO: NetBSD implementation
-#ifdef __FreeBSD__ || __OpenBSD__
     {"sysinfo", psutil_sysinfo, METH_VARARGS,
      "Return various system stats"},
-#endif
 #if defined(__FreeBSD__) || defined(__NetBSD__)
     {"net_connections", psutil_net_connections, METH_VARARGS,
      "Return system-wide open connections."},

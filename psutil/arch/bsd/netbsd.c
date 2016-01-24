@@ -673,3 +673,22 @@ error:
         free(stats);
     return NULL;
 }
+
+
+PyObject *
+psutil_sysinfo(PyObject *self, PyObject *args) {
+    int maxfiles;
+    int maxprocs;
+    size_t size_int = sizeof(maxfiles);
+
+    if (sysctlbyname("kern.maxfiles", &maxfiles, &size_int, NULL, 0))
+        goto error;
+    if (sysctlbyname("kern.maxproc", &maxprocs, &size_int, NULL, 0))
+        goto error;
+
+    return Py_BuildValue("ii", maxfiles, maxprocs);
+
+error:
+    PyErr_SetFromErrno(PyExc_OSError);
+    return NULL;
+}

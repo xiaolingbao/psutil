@@ -442,6 +442,9 @@ class TestModuleFunctionsLeaks(Base):
     def test_net_if_stats(self):
         self.execute('net_if_stats')
 
+    def test_sysinfo(self):
+        self.execute('sysinfo')
+
 
 if __name__ == '__main__':
     run_test_module_by_name(__file__)

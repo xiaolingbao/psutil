@@ -663,6 +663,12 @@ class TestSystemAPIs(unittest.TestCase):
             assert user.started > 0.0, user
             datetime.datetime.fromtimestamp(user.started)
 
+    def test_sysinfo(self):
+        # Tested more extensively in per-platform test modules.
+        infos = psutil.sysinfo()
+        for name in infos._fields:
+            self.assertGreaterEqual(getattr(infos, name), 0)
+
 
 if __name__ == '__main__':
     run_test_module_by_name(__file__)

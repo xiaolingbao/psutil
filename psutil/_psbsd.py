@@ -122,6 +122,9 @@ elif OPENBSD:
     ssysinfo = namedtuple(
         'ssysinfo', ['max_files', 'max_procs', 'max_threads', 'open_files',
                      'num_threads'])
+elif NETBSD:
+    ssysinfo = namedtuple(
+        'ssysinfo', ['max_files', 'max_procs', 'ctx_switches', 'interrupts'])
 
 
 # set later from __init__.py
@@ -262,7 +265,18 @@ def sysinfo():
         maxfiles, maxprocs, maxthreads, nfiles, nthreads = cext.sysinfo()
         return ssysinfo(maxfiles, maxprocs, maxthreads, nfiles, nthreads)
     else:
-        raise RuntimeError("unknown platform")  # pragma: no cover
+        maxfiles, maxprocs = cext.sysinfo()
+        ctx_switches = None
+        interrupts = None
+        with open('/proc/stat', 'rb') as f:
+            for line in f:
+                if line.startswith(b'ctxt'):
+                    ctx_switches = int(line.split()[1])
+                elif line.startswith(b'intr'):
+                    interrupts = int(line.split()[1])
+                if ctx_switches is not None and interrupts is not None:
+                    break
+        return ssysinfo(maxfiles, maxprocs, ctx_switches, interrupts)
 
 
 def net_connections(kind):
