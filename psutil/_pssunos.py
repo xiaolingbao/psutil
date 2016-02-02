@@ -67,6 +67,8 @@ pmmap_grouped = namedtuple('pmmap_grouped',
                            ['path', 'rss', 'anonymous', 'locked'])
 pmmap_ext = namedtuple(
     'pmmap_ext', 'addr perms ' + ' '.join(pmmap_grouped._fields))
+ssysinfo = namedtuple('ssysinfo', ['ctx_switches', 'interrupts', 'nthreads',
+                                   'traps', 'syscalls'])
 
 # set later from __init__.py
 NoSuchProcess = None
@@ -189,6 +191,11 @@ def users():
         nt = _common.suser(user, tty, hostname, tstamp)
         retlist.append(nt)
     return retlist
+
+
+def sysinfo():
+    ctx_switches, interrupts, nthreads, traps, syscalls = cext.sysinfo()
+    return ssysinfo(ctx_switches, interrupts, nthreads, traps, syscalls)
 
 
 def disk_partitions(all=False):
