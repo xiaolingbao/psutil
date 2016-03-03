@@ -14,6 +14,7 @@ from . import _common
 from . import _psutil_windows as cext
 from ._common import conn_tmap
 from ._common import isfile_strict
+from ._common import parse_environ_block
 from ._common import sockfam_to_enum
 from ._common import socktype_to_enum
 from ._common import usage_percent
@@ -83,10 +84,12 @@ if enum is not None:
 
 scputimes = namedtuple('scputimes', ['user', 'system', 'idle'])
 svmem = namedtuple('svmem', ['total', 'available', 'percent', 'used', 'free'])
-pextmem = namedtuple(
-    'pextmem', ['num_page_faults', 'peak_wset', 'wset', 'peak_paged_pool',
-                'paged_pool', 'peak_nonpaged_pool', 'nonpaged_pool',
-                'pagefile', 'peak_pagefile', 'private'])
+pmem = namedtuple(
+    'pmem', ['rss', 'vms',
+             'num_page_faults', 'peak_wset', 'wset', 'peak_paged_pool',
+             'paged_pool', 'peak_nonpaged_pool', 'nonpaged_pool',
+             'pagefile', 'peak_pagefile', 'private'])
+pfullmem = namedtuple('pfullmem', pmem._fields + ('uss', ))
 pmmap_grouped = namedtuple('pmmap_grouped', ['path', 'rss'])
 pmmap_ext = namedtuple(
     'pmmap_ext', 'addr perms ' + ' '.join(pmmap_grouped._fields))
@@ -281,9 +284,6 @@ def wrap_exceptions(fun):
         try:
             return fun(self, *args, **kwargs)
         except OSError as err:
-            # support for private module import
-            if NoSuchProcess is None or AccessDenied is None:
-                raise
             if err.errno in ACCESS_DENIED_SET:
                 raise AccessDenied(self.pid, self._name)
             if err.errno == errno.ESRCH:
@@ -341,6 +341,10 @@ class Process(object):
         else:
             return [py2_strencode(s) for s in ret]
 
+    @wrap_exceptions
+    def environ(self):
+        return parse_environ_block(cext.proc_environ(self.pid))
+
     def ppid(self):
         try:
             return ppid_map()[self.pid]
@@ -359,16 +363,19 @@ class Process(object):
 
     @wrap_exceptions
     def memory_info(self):
-        # on Windows RSS == WorkingSetSize and VSM == PagefileUsage
-        # fields of PROCESS_MEMORY_COUNTERS struct:
-        # http://msdn.microsoft.com/en-us/library/windows/desktop/
-        #     ms684877(v=vs.85).aspx
+        # on Windows RSS == WorkingSetSize and VSM == PagefileUsage.
+        # Underlying C function returns fields of PROCESS_MEMORY_COUNTERS
+        # struct.
         t = self._get_raw_meminfo()
-        return _common.pmem(t[2], t[7])
+        rss = t[2]  # wset
+        vms = t[7]  # pagefile
+        return pmem(*(rss, vms, ) + t)
 
     @wrap_exceptions
-    def memory_info_ex(self):
-        return pextmem(*self._get_raw_meminfo())
+    def memory_full_info(self):
+        basic_mem = self.memory_info()
+        uss = cext.proc_memory_uss(self.pid)
+        return pfullmem(*basic_mem + (uss, ))
 
     def memory_maps(self):
         try:
@@ -404,9 +411,6 @@ class Process(object):
             timeout = int(timeout * 1000)
         ret = cext.proc_wait(self.pid, timeout)
         if ret == WAIT_TIMEOUT:
-            # support for private module import
-            if TimeoutExpired is None:
-                raise RuntimeError("timeout expired")
             raise TimeoutExpired(timeout, self.pid, self._name)
         return ret
 
@@ -444,14 +448,15 @@ class Process(object):
     @wrap_exceptions
     def cpu_times(self):
         try:
-            ret = cext.proc_cpu_times(self.pid)
+            user, system = cext.proc_cpu_times(self.pid)
         except OSError as err:
             if err.errno in ACCESS_DENIED_SET:
                 nt = ntpinfo(*cext.proc_info(self.pid))
-                ret = (nt.user_time, nt.kernel_time)
+                user, system = (nt.user_time, nt.kernel_time)
             else:
                 raise
-        return _common.pcputimes(*ret)
+        # Children user/system times are not retrievable (set to 0).
+        return _common.pcputimes(user, system, 0, 0)
 
     @wrap_exceptions
     def suspend(self):

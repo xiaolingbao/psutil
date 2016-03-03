@@ -134,11 +134,17 @@ static PyObject *
 psutil_proc_name(PyObject *self, PyObject *args) {
     long pid;
     struct kinfo_proc kp;
+
     if (! PyArg_ParseTuple(args, "l", &pid))
         return NULL;
     if (psutil_get_kinfo_proc(pid, &kp) == -1)
         return NULL;
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_DecodeFSDefault(kp.kp_proc.p_comm);
+#else
     return Py_BuildValue("s", kp.kp_proc.p_comm);
+#endif
+
 }
 
 
@@ -158,7 +164,12 @@ psutil_proc_cwd(PyObject *self, PyObject *args) {
     {
         return NULL;
     }
+
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_DecodeFSDefault(pathinfo.pvi_cdir.vip_path);
+#else
     return Py_BuildValue("s", pathinfo.pvi_cdir.vip_path);
+#endif
 }
 
 
@@ -178,7 +189,11 @@ psutil_proc_exe(PyObject *self, PyObject *args) {
         psutil_raise_ad_or_nsp(pid);
         return NULL;
     }
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_DecodeFSDefault(buf);
+#else
     return Py_BuildValue("s", buf);
+#endif
 }
 
 
@@ -196,6 +211,23 @@ psutil_proc_cmdline(PyObject *self, PyObject *args) {
     // get the commandline, defined in arch/osx/process_info.c
     py_retlist = psutil_get_cmdline(pid);
     return py_retlist;
+}
+
+
+/*
+ * Return process environment as a Python string.
+ */
+static PyObject *
+psutil_proc_environ(PyObject *self, PyObject *args) {
+    long pid;
+    PyObject *py_retdict = NULL;
+
+    if (! PyArg_ParseTuple(args, "l", &pid))
+        return NULL;
+
+    // get the environment block, defined in arch/osx/process_info.c
+    py_retdict = psutil_get_environ(pid);
+    return py_retdict;
 }
 
 
@@ -504,6 +536,122 @@ psutil_proc_memory_info(PyObject *self, PyObject *args) {
 
 
 /*
+ * Indicates if the given virtual address on the given architecture is in the
+ * shared VM region.
+ */
+bool
+psutil_in_shared_region(mach_vm_address_t addr, cpu_type_t type) {
+    mach_vm_address_t base;
+    mach_vm_address_t size;
+
+    switch (type) {
+        case CPU_TYPE_ARM:
+            base = SHARED_REGION_BASE_ARM;
+            size = SHARED_REGION_SIZE_ARM;
+            break;
+        case CPU_TYPE_I386:
+            base = SHARED_REGION_BASE_I386;
+            size = SHARED_REGION_SIZE_I386;
+            break;
+        case CPU_TYPE_X86_64:
+            base = SHARED_REGION_BASE_X86_64;
+            size = SHARED_REGION_SIZE_X86_64;
+            break;
+        default:
+            return false;
+    }
+
+    return base <= addr && addr < (base + size);
+}
+
+
+/*
+ * Returns the USS (unique set size) of the process. Reference:
+ * https://dxr.mozilla.org/mozilla-central/source/xpcom/base/
+ *     nsMemoryReporterManager.cpp
+ */
+static PyObject *
+psutil_proc_memory_uss(PyObject *self, PyObject *args) {
+    long pid;
+    int err;
+    size_t len;
+    cpu_type_t cpu_type;
+    size_t private_pages = 0;
+    mach_vm_size_t size = 0;
+    mach_msg_type_number_t info_count = VM_REGION_TOP_INFO_COUNT;
+    kern_return_t kr;
+    vm_size_t page_size;
+    mach_vm_address_t addr = MACH_VM_MIN_ADDRESS;
+    mach_port_t task = MACH_PORT_NULL;
+    vm_region_top_info_data_t info;
+    mach_port_t object_name;
+
+    if (! PyArg_ParseTuple(args, "l", &pid))
+        return NULL;
+
+    err = task_for_pid(mach_task_self(), pid, &task);
+    if (err != KERN_SUCCESS) {
+        psutil_raise_ad_or_nsp(pid);
+        return NULL;
+    }
+
+    len = sizeof(cpu_type);
+    if (sysctlbyname("sysctl.proc_cputype", &cpu_type, &len, NULL, 0) != 0) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    // Roughly based on libtop_update_vm_regions in
+    // http://www.opensource.apple.com/source/top/top-100.1.2/libtop.c
+    for (addr = 0; ; addr += size) {
+        kr = mach_vm_region(
+            task, &addr, &size, VM_REGION_TOP_INFO, (vm_region_info_t)&info,
+            &info_count, &object_name);
+        if (kr == KERN_INVALID_ADDRESS) {
+            // Done iterating VM regions.
+            break;
+        }
+        else if (kr != KERN_SUCCESS) {
+            PyErr_Format(PyExc_RuntimeError, "mach_vm_region() failed");
+            return NULL;
+        }
+
+        if (psutil_in_shared_region(addr, cpu_type) &&
+                info.share_mode != SM_PRIVATE) {
+            continue;
+        }
+
+        switch (info.share_mode) {
+            case SM_LARGE_PAGE:
+                // NB: Large pages are not shareable and always resident.
+            case SM_PRIVATE:
+                private_pages += info.private_pages_resident;
+                private_pages += info.shared_pages_resident;
+                break;
+            case SM_COW:
+                private_pages += info.private_pages_resident;
+                if (info.ref_count == 1) {
+                    // Treat copy-on-write pages as private if they only
+                    // have one reference.
+                    private_pages += info.shared_pages_resident;
+                }
+                break;
+            case SM_SHARED:
+            default:
+                break;
+        }
+    }
+
+    mach_port_deallocate(mach_task_self(), task);
+
+    if (host_page_size(mach_host_self(), &page_size) != KERN_SUCCESS)
+        page_size = PAGE_SIZE;
+
+    return Py_BuildValue("K", private_pages * page_size);
+}
+
+
+/*
  * Return number of threads used by process as a Python integer.
  */
 static PyObject *
@@ -543,7 +691,6 @@ psutil_proc_num_ctx_switches(PyObject *self, PyObject *args) {
  */
 static PyObject *
 psutil_virtual_mem(PyObject *self, PyObject *args) {
-
     int      mib[2];
     uint64_t total;
     size_t   len = sizeof(total);
@@ -984,6 +1131,7 @@ psutil_proc_open_files(PyObject *self, PyObject *args) {
 
     PyObject *py_retlist = PyList_New(0);
     PyObject *py_tuple = NULL;
+    PyObject *py_path = NULL;
 
     if (py_retlist == NULL)
         return NULL;
@@ -1048,15 +1196,23 @@ psutil_proc_open_files(PyObject *self, PyObject *args) {
             // --- /errors checking
 
             // --- construct python list
+#if PY_MAJOR_VERSION >= 3
+            py_path = PyUnicode_DecodeFSDefault(vi.pvip.vip_path);
+#else
+            py_path = Py_BuildValue("s", vi.pvip.vip_path);
+#endif
+            if (! py_path)
+                goto error;
             py_tuple = Py_BuildValue(
-                "(si)",
-                vi.pvip.vip_path,
+                "(Oi)",
+                py_path,
                 (int)fdp_pointer->proc_fd);
             if (!py_tuple)
                 goto error;
             if (PyList_Append(py_retlist, py_tuple))
                 goto error;
             Py_DECREF(py_tuple);
+            Py_DECREF(py_path);
             // --- /construct python list
         }
     }
@@ -1066,6 +1222,7 @@ psutil_proc_open_files(PyObject *self, PyObject *args) {
 
 error:
     Py_XDECREF(py_tuple);
+    Py_XDECREF(py_path);
     Py_DECREF(py_retlist);
     if (fds_pointer != NULL)
         free(fds_pointer);
@@ -1639,6 +1796,8 @@ PsutilMethods[] = {
      "Return process name"},
     {"proc_cmdline", psutil_proc_cmdline, METH_VARARGS,
      "Return process cmdline as a list of cmdline arguments"},
+    {"proc_environ", psutil_proc_environ, METH_VARARGS,
+     "Return process environment data"},
     {"proc_exe", psutil_proc_exe, METH_VARARGS,
      "Return path of the process executable"},
     {"proc_cwd", psutil_proc_cwd, METH_VARARGS,
@@ -1656,6 +1815,8 @@ PsutilMethods[] = {
      "seconds since the epoch"},
     {"proc_memory_info", psutil_proc_memory_info, METH_VARARGS,
      "Return memory information about a process"},
+    {"proc_memory_uss", psutil_proc_memory_uss, METH_VARARGS,
+     "Return process USS memory"},
     {"proc_num_threads", psutil_proc_num_threads, METH_VARARGS,
      "Return number of threads used by process"},
     {"proc_status", psutil_proc_status, METH_VARARGS,

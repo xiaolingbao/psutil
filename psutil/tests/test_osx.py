@@ -4,7 +4,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""OSX specific tests.  These are implicitly run by test_psutil.py."""
+"""OSX specific tests."""
 
 import os
 import re
@@ -13,19 +13,19 @@ import sys
 import time
 
 import psutil
-
+from psutil import OSX
 from psutil._compat import PY3
-from test_psutil import get_test_subprocess
-from test_psutil import MEMORY_TOLERANCE
-from test_psutil import OSX
-from test_psutil import reap_children
-from test_psutil import retry_before_failing
-from test_psutil import sh
-from test_psutil import TRAVIS
-from test_psutil import unittest
+from psutil.tests import get_test_subprocess
+from psutil.tests import MEMORY_TOLERANCE
+from psutil.tests import reap_children
+from psutil.tests import retry_before_failing
+from psutil.tests import run_test_module_by_name
+from psutil.tests import sh
+from psutil.tests import TRAVIS
+from psutil.tests import unittest
 
 
-PAGESIZE = os.sysconf("SC_PAGE_SIZE")
+PAGESIZE = os.sysconf("SC_PAGE_SIZE") if OSX else None
 
 
 def sysctl(cmdline):
@@ -81,7 +81,7 @@ def human2bytes(s):
 
 
 @unittest.skipUnless(OSX, "not an OSX system")
-class OSXSpecificTestCase(unittest.TestCase):
+class TestProcess(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -102,6 +102,10 @@ class OSXSpecificTestCase(unittest.TestCase):
         start_psutil = time.strftime("%a %b %e %H:%M:%S %Y",
                                      time.localtime(start_psutil))
         self.assertEqual(start_ps, start_psutil)
+
+
+@unittest.skipUnless(OSX, "not an OSX system")
+class TestSystemAPIs(unittest.TestCase):
 
     def test_disks(self):
         # test psutil.disk_usage() and psutil.disk_partitions()
@@ -171,10 +175,12 @@ class OSXSpecificTestCase(unittest.TestCase):
 
     # --- swap mem
 
+    @retry_before_failing()
     def test_swapmem_sin(self):
         num = vm_stat("Pageins")
         self.assertEqual(psutil.swap_memory().sin, num)
 
+    @retry_before_failing()
     def test_swapmem_sout(self):
         num = vm_stat("Pageouts")
         self.assertEqual(psutil.swap_memory().sout, num)
@@ -189,13 +195,5 @@ class OSXSpecificTestCase(unittest.TestCase):
         self.assertEqual(psutil_smem.free, human2bytes(free))
 
 
-def main():
-    test_suite = unittest.TestSuite()
-    test_suite.addTest(unittest.makeSuite(OSXSpecificTestCase))
-    result = unittest.TextTestRunner(verbosity=2).run(test_suite)
-    return result.wasSuccessful()
-
-
 if __name__ == '__main__':
-    if not main():
-        sys.exit(1)
+    run_test_module_by_name(__file__)

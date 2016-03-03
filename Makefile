@@ -4,14 +4,14 @@
 
 # You can set these variables from the command line.
 PYTHON    = python
-TSCRIPT   = test/test_psutil.py
+TSCRIPT   = psutil/tests/runner.py
 
 all: test
 
 clean:
 	rm -f `find . -type f -name \*.py[co]`
 	rm -f `find . -type f -name \*.so`
-	rm -f `find . -type f -name .\*~`
+	rm -f `find . -type f -name \*.~`
 	rm -f `find . -type f -name \*.orig`
 	rm -f `find . -type f -name \*.bak`
 	rm -f `find . -type f -name \*.rej`
@@ -57,7 +57,7 @@ setup-dev-env: install-git-hooks
 		unittest2 \
 
 install: build
-	$(PYTHON) setup.py install --user
+	$(PYTHON) setup.py develop --user
 
 uninstall:
 	cd ..; $(PYTHON) -m pip uninstall -y -v psutil
@@ -66,19 +66,23 @@ test: install
 	$(PYTHON) $(TSCRIPT)
 
 test-process: install
-	$(PYTHON) -m unittest -v test.test_psutil.TestProcess
+	$(PYTHON) -m unittest -v psutil.tests.test_process
 
 test-system: install
-	$(PYTHON) -m unittest -v test.test_psutil.TestSystemAPIs
+	$(PYTHON) -m unittest -v psutil.tests.test_system
 
 test-memleaks: install
-	$(PYTHON) test/test_memory_leaks.py
+	$(PYTHON) psutil/tests/test_memory_leaks.py
 
 # Run a specific test by name; e.g. "make test-by-name disk_" will run
 # all test methods containing "disk_" in their name.
 # Requires "pip install nose".
 test-by-name: install
-	@$(PYTHON) -m nose test/test_psutil.py test/_* --nocapture -v -m $(filter-out $@,$(MAKECMDGOALS))
+	@$(PYTHON) -m nose psutil/tests/*.py --nocapture -v -m $(filter-out $@,$(MAKECMDGOALS))
+
+# Run specific platform tests only.
+test-platform: install
+	$(PYTHON) psutil/tests/test_`$(PYTHON) -c 'import psutil; print([x.lower() for x in ("FREEBSD", "LINUX", "NETBSD", "OPENBSD", "OSX", "SUNOS", "WINDOWS") if getattr(psutil, x)][0])'`.py
 
 # Same as above but for test_memory_leaks.py script.
 test-memleaks-by-name: install

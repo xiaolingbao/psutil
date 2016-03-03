@@ -10,6 +10,8 @@ environment:
     # Pre-installed Python versions, which Appveyor may upgrade to
     # a later point release.
 
+    # 32 bits
+
     - PYTHON: "C:\\Python27"
       PYTHON_VERSION: "2.7.x"
       PYTHON_ARCH: "32"
@@ -22,20 +24,29 @@ environment:
       PYTHON_VERSION: "3.4.x"
       PYTHON_ARCH: "32"
 
+    - PYTHON: "C:\\Python35"
+      PYTHON_VERSION: "3.5.x"
+      PYTHON_ARCH: "32"
+
+    # 64 bits
+
     - PYTHON: "C:\\Python27-x64"
       PYTHON_VERSION: "2.7.x"
       PYTHON_ARCH: "64"
-      WINDOWS_SDK_VERSION: "v7.0"
 
     - PYTHON: "C:\\Python33-x64"
       PYTHON_VERSION: "3.3.x"
       PYTHON_ARCH: "64"
-      WINDOWS_SDK_VERSION: "v7.1"
 
     - PYTHON: "C:\\Python34-x64"
       PYTHON_VERSION: "3.4.x"
       PYTHON_ARCH: "64"
-      WINDOWS_SDK_VERSION: "v7.1"
+
+    # XXX - not sure how to fix this:
+    # https://ci.appveyor.com/project/giampaolo/psutil/build/354/job/uqf3rms55mrv90ju
+    # - PYTHON: "C:\\Python35-x64"
+    #   PYTHON_VERSION: "3.5.x"
+    #   PYTHON_ARCH: "64"
 
     # Also build on a Python version not pre-installed by Appveyor.
     # See: https://github.com/ogrisel/python-appveyor-demo/issues/10
@@ -52,20 +63,20 @@ install:
   # - ps: (new-object net.webclient).DownloadFile('https://raw.github.com/pypa/pip/master/contrib/get-pip.py', 'C:/get-pip.py')
   # - "%PYTHON%/python.exe C:/get-pip.py"
   # - "%PYTHON%/python.exe -m pip install ..."
+  - "%WITH_COMPILER% %PYTHON%/Scripts/pip.exe install unittest2 ipaddress pypiwin32 wmi wheel setuptools --upgrade"
   - "%WITH_COMPILER% %PYTHON%/python.exe setup.py build"
   - "%WITH_COMPILER% %PYTHON%/python.exe setup.py build build_ext -i"
-  - "%WITH_COMPILER% %PYTHON%/python.exe setup.py install"
-  - "%WITH_COMPILER% %PYTHON%/Scripts/pip.exe install unittest2 ipaddress pypiwin32 wmi wheel --upgrade"
+  - "%WITH_COMPILER% %PYTHON%/python.exe setup.py develop"
   # 1.0.1 is the latest release supporting python 2.6
   - "%WITH_COMPILER% %PYTHON%/Scripts/pip.exe install mock==1.0.1"
 
 build: off
 
 test_script:
-  - "%WITH_COMPILER% %PYTHON%/python test/test_psutil.py"
+  - "%WITH_COMPILER% %PYTHON%/python psutil/tests/runner.py"
 
-after_test:
-  - "%WITH_COMPILER% %PYTHON%/python setup.py bdist_wheel"
+# after_test:
+#   - "%WITH_COMPILER% %PYTHON%/python setup.py bdist_wheel"
 
 artifacts:
   - path: dist\*

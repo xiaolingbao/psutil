@@ -65,6 +65,14 @@ W: http://daviddaeschler.com
 D: some contributions to initial design/bootstrap plus occasional bug fixing
 I: 522, 536
 
+N: Thomas Klausner
+W: https://github.com/0-wiz-0
+I: #557
+
+N: Ryo Onodera
+W: https://github.com/ryoon
+I: #557
+
 N: cjgohlke
 E: cjgohlke@gmail.com
 D: Windows 64 bit support
@@ -342,3 +350,35 @@ I: 541
 N: Mike Sarahan
 W: https://github.com/msarahan
 I: 688
+
+N: Syohei YOSHIDA
+W: https://github.com/syohex
+I: 730
+
+N: Frank Benkstein
+W: https://github.com/fbenkstein
+I: 732, 733
+
+N: Visa Hankala
+E: visa@openbsd.org
+I: 741
+
+N: Sebastian-Gabriel Brestin
+C: Romania
+E: sebastianbrestin@gmail.com
+I: 704
+
+N: Timmy Konick
+W: https://github.com/tijko
+I: 751
+
+N: mpderbec
+W: https://github.com/mpderbec
+I: 660
+
+N: Mozilla Foundation
+D: sample code for process USS memory.
+
+N: wxwright
+W: https://github.com/wxwright
+I: 776

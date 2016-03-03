@@ -21,8 +21,9 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
-
 HERE = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(HERE, "psutil"))
+import _common  # NOQA
 
 
 def get_version():
@@ -67,19 +68,17 @@ VERSION_MACRO = ('PSUTIL_VERSION', int(VERSION.replace('.', '')))
 
 
 # POSIX
-if os.name == 'posix':
+if _common.POSIX:
     posix_extension = Extension(
         'psutil._psutil_posix',
         sources=['psutil/_psutil_posix.c'])
-    if sys.platform.startswith("sunos"):
+    if sys.platform.startswith("sunos") or sys.platform.startswith("solaris"):
         posix_extension.libraries.append('socket')
         if platform.release() == '5.10':
             posix_extension.sources.append('psutil/arch/solaris/v10/ifaddrs.c')
             posix_extension.define_macros.append(('PSUTIL_SUNOS10', 1))
-
 # Windows
-if sys.platform.startswith("win32"):
-
+if _common.WINDOWS:
     def get_winver():
         maj, min = sys.getwindowsversion()[0:2]
         return '0x0%s' % ((maj * 100) + min)
@@ -113,13 +112,13 @@ if sys.platform.startswith("win32"):
     )
     extensions = [ext]
 # OS X
-elif sys.platform.startswith("darwin"):
+elif _common.OSX:
     ext = Extension(
         'psutil._psutil_osx',
         sources=[
             'psutil/_psutil_osx.c',
             'psutil/_psutil_common.c',
-            'psutil/arch/osx/process_info.c'
+            'psutil/arch/osx/process_info.c',
         ],
         define_macros=[VERSION_MACRO],
         extra_link_args=[
@@ -127,7 +126,7 @@ elif sys.platform.startswith("darwin"):
         ])
     extensions = [ext, posix_extension]
 # FreeBSD
-elif sys.platform.startswith("freebsd"):
+elif _common.FREEBSD:
     ext = Extension(
         'psutil._psutil_bsd',
         sources=[
@@ -140,7 +139,7 @@ elif sys.platform.startswith("freebsd"):
         libraries=["devstat"])
     extensions = [ext, posix_extension]
 # OpenBSD
-elif sys.platform.startswith("openbsd"):
+elif _common.OPENBSD:
     ext = Extension(
         'psutil._psutil_bsd',
         sources=[
@@ -151,8 +150,21 @@ elif sys.platform.startswith("openbsd"):
         define_macros=[VERSION_MACRO],
         libraries=["kvm"])
     extensions = [ext, posix_extension]
+# NetBSD
+elif _common.NETBSD:
+    ext = Extension(
+        'psutil._psutil_bsd',
+        sources=[
+            'psutil/_psutil_bsd.c',
+            'psutil/_psutil_common.c',
+            'psutil/arch/bsd/netbsd.c',
+            'psutil/arch/bsd/netbsd_socks.c',
+        ],
+        define_macros=[VERSION_MACRO],
+        libraries=["kvm"])
+    extensions = [ext, posix_extension]
 # Linux
-elif sys.platform.startswith("linux"):
+elif _common.LINUX:
     def get_ethtool_macro():
         # see: https://github.com/giampaolo/psutil/issues/659
         from distutils.unixccompiler import UnixCCompiler
@@ -189,7 +201,7 @@ elif sys.platform.startswith("linux"):
         define_macros=macros)
     extensions = [ext, posix_extension]
 # Solaris
-elif sys.platform.lower().startswith('sunos'):
+elif _common.SUNOS:
     ext = Extension(
         'psutil._psutil_sunos',
         sources=['psutil/_psutil_sunos.c'],
@@ -210,14 +222,14 @@ def main():
             'ps', 'top', 'kill', 'free', 'lsof', 'netstat', 'nice', 'tty',
             'ionice', 'uptime', 'taskmgr', 'process', 'df', 'iotop', 'iostat',
             'ifconfig', 'taskset', 'who', 'pidof', 'pmap', 'smem', 'pstree',
-            'monitoring', 'ulimit', 'prlimit',
+            'monitoring', 'ulimit', 'prlimit', 'smem',
         ],
         author='Giampaolo Rodola',
         author_email='g.rodola <at> gmail <dot> com',
         url='https://github.com/giampaolo/psutil',
         platforms='Platform Independent',
         license='BSD',
-        packages=['psutil'],
+        packages=['psutil', 'psutil.tests'],
         # see: python setup.py register --list-classifiers
         classifiers=[
             'Development Status :: 5 - Production/Stable',
@@ -232,7 +244,9 @@ def main():
             'Operating System :: Microsoft',
             'Operating System :: OS Independent',
             'Operating System :: POSIX :: BSD :: FreeBSD',
+            'Operating System :: POSIX :: BSD :: NetBSD',
             'Operating System :: POSIX :: BSD :: OpenBSD',
+            'Operating System :: POSIX :: BSD',
             'Operating System :: POSIX :: Linux',
             'Operating System :: POSIX :: SunOS/Solaris',
             'Operating System :: POSIX',
@@ -246,6 +260,7 @@ def main():
             'Programming Language :: Python :: 3.2',
             'Programming Language :: Python :: 3.3',
             'Programming Language :: Python :: 3.4',
+            'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
             'Programming Language :: Python',
@@ -256,6 +271,7 @@ def main():
             'Topic :: System :: Monitoring',
             'Topic :: System :: Networking :: Monitoring',
             'Topic :: System :: Networking',
+            'Topic :: System :: Operating System',
             'Topic :: System :: Systems Administration',
             'Topic :: Utilities',
         ],

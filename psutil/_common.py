@@ -13,6 +13,7 @@ import os
 import socket
 import stat
 import sys
+import warnings
 from collections import namedtuple
 from socket import AF_INET
 from socket import SOCK_DGRAM
@@ -31,6 +32,16 @@ else:
 
 # --- constants
 
+POSIX = os.name == "posix"
+WINDOWS = os.name == "nt"
+LINUX = sys.platform.startswith("linux")
+OSX = sys.platform.startswith("darwin")
+FREEBSD = sys.platform.startswith("freebsd")
+OPENBSD = sys.platform.startswith("openbsd")
+NETBSD = sys.platform.startswith("netbsd")
+BSD = FREEBSD or OPENBSD or NETBSD
+SUNOS = sys.platform.startswith("sunos") or sys.platform.startswith("solaris")
+
 AF_INET6 = getattr(socket, 'AF_INET6', None)
 AF_UNIX = getattr(socket, 'AF_UNIX', None)
 
@@ -43,9 +54,10 @@ STATUS_ZOMBIE = "zombie"
 STATUS_DEAD = "dead"
 STATUS_WAKE_KILL = "wake-kill"
 STATUS_WAKING = "waking"
-STATUS_IDLE = "idle"  # BSD
-STATUS_LOCKED = "locked"  # BSD
-STATUS_WAITING = "waiting"  # BSD
+STATUS_IDLE = "idle"  # FreeBSD, OSX
+STATUS_LOCKED = "locked"  # FreeBSD
+STATUS_WAITING = "waiting"  # FreeBSD
+STATUS_SUSPENDED = "suspended"  # NetBSD
 
 CONN_ESTABLISHED = "ESTABLISHED"
 CONN_SYN_SENT = "SYN_SENT"
@@ -80,7 +92,7 @@ def usage_percent(used, total, _round=None):
     try:
         ret = (used / total) * 100
     except ZeroDivisionError:
-        ret = 0
+        ret = 0.0 if isinstance(used, float) or isinstance(total, float) else 0
     if _round is not None:
         return round(ret, _round)
     else:
@@ -168,16 +180,45 @@ def supports_ipv6():
         return False
 
 
+def parse_environ_block(data):
+    """Parse a C environ block of environment variables into a dictionary."""
+    # The block is usually raw data from the target process.  It might contain
+    # trailing garbage and lines that do not look like assignments.
+    ret = {}
+    pos = 0
+
+    # localize global variable to speed up access.
+    WINDOWS_ = WINDOWS
+    while True:
+        next_pos = data.find("\0", pos)
+        # nul byte at the beginning or double nul byte means finish
+        if next_pos <= pos:
+            break
+        # there might not be an equals sign
+        equal_pos = data.find("=", pos, next_pos)
+        if equal_pos > pos:
+            key = data[pos:equal_pos]
+            value = data[equal_pos+1:next_pos]
+            # Windows expects environment variables to be uppercase only
+            if WINDOWS_:
+                key = key.upper()
+            ret[key] = value
+        pos = next_pos + 1
+
+    return ret
+
+
 def sockfam_to_enum(num):
     """Convert a numeric socket family value to an IntEnum member.
     If it's not a known member, return the numeric value itself.
     """
     if enum is None:
         return num
-    try:
-        return socket.AddressFamily(num)
-    except (ValueError, AttributeError):
-        return num
+    else:  # pragma: no cover
+        try:
+            return socket.AddressFamily(num)
+        except (ValueError, AttributeError):
+            return num
 
 
 def socktype_to_enum(num):
@@ -186,10 +227,29 @@ def socktype_to_enum(num):
     """
     if enum is None:
         return num
-    try:
-        return socket.AddressType(num)
-    except (ValueError, AttributeError):
-        return num
+    else:  # pragma: no cover
+        try:
+            return socket.AddressType(num)
+        except (ValueError, AttributeError):
+            return num
+
+
+def deprecated_method(replacement):
+    """A decorator which can be used to mark a method as deprecated
+    'replcement' is the method name which will be called instead.
+    """
+    def outer(fun):
+        msg = "%s() is deprecated; use %s() instead" % (
+            fun.__name__, replacement)
+        if fun.__doc__ is None:
+            fun.__doc__ = msg
+
+        @functools.wraps(fun)
+        def inner(self, *args, **kwargs):
+            warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
+            return getattr(self, replacement)(*args, **kwargs)
+        return inner
+    return outer
 
 
 # --- Process.connections() 'kind' parameter mapping
@@ -250,10 +310,9 @@ snicstats = namedtuple('snicstats', ['isup', 'duplex', 'speed', 'mtu'])
 
 # --- namedtuples for psutil.Process methods
 
-# psutil.Process.memory_info()
-pmem = namedtuple('pmem', ['rss', 'vms'])
 # psutil.Process.cpu_times()
-pcputimes = namedtuple('pcputimes', ['user', 'system'])
+pcputimes = namedtuple('pcputimes',
+                       ['user', 'system', 'children_user', 'children_system'])
 # psutil.Process.open_files()
 popenfile = namedtuple('popenfile', ['path', 'fd'])
 # psutil.Process.threads()

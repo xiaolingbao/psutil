@@ -5,9 +5,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Windows specific tests.  These are implicitly run by test_psutil.py."""
+"""Windows specific tests."""
 
 import errno
+import glob
 import os
 import platform
 import signal
@@ -16,31 +17,34 @@ import sys
 import time
 import traceback
 
-import mock
-
 try:
-    import wmi
+    import wmi  # requires "pip install wmi"
 except ImportError:
     wmi = None
 try:
-    import win32api
+    import win32api  # requires "pip install pypiwin32"
     import win32con
 except ImportError:
     win32api = win32con = None
 
 import psutil
+from psutil import WINDOWS
 from psutil._compat import callable
 from psutil._compat import long
 from psutil._compat import PY3
-from test_psutil import APPVEYOR
-from test_psutil import get_test_subprocess
-from test_psutil import reap_children
-from test_psutil import retry_before_failing
-from test_psutil import unittest
-from test_psutil import WINDOWS
+from psutil.tests import APPVEYOR
+from psutil.tests import get_test_subprocess
+from psutil.tests import mock
+from psutil.tests import reap_children
+from psutil.tests import retry_before_failing
+from psutil.tests import run_test_module_by_name
+from psutil.tests import unittest
 
 
 cext = psutil._psplatform.cext
+
+# are we a 64 bit process
+IS_64_BIT = sys.maxsize > 2**32
 
 
 def wrap_exceptions(fun):
@@ -81,7 +85,7 @@ class WindowsSpecificTestCase(unittest.TestCase):
         p.username()
         self.assertTrue(p.create_time() >= 0.0)
         try:
-            rss, vms = p.memory_info()
+            rss, vms = p.memory_info()[:2]
         except psutil.AccessDenied:
             # expected on Windows Vista and Windows 7
             if not platform.uname()[1] in ('vista', 'win-7', 'win7'):
@@ -311,6 +315,17 @@ class WindowsSpecificTestCase(unittest.TestCase):
         self.assertRaises(psutil.NoSuchProcess,
                           p.send_signal, signal.CTRL_BREAK_EVENT)
 
+    @unittest.skipIf(wmi is None, "wmi module is not installed")
+    def test_net_if_stats(self):
+        ps_names = set(cext.net_if_stats())
+        wmi_adapters = wmi.WMI().Win32_NetworkAdapter()
+        wmi_names = set()
+        for wmi_adapter in wmi_adapters:
+            wmi_names.add(wmi_adapter.Name)
+            wmi_names.add(wmi_adapter.NetConnectionID)
+        self.assertTrue(ps_names & wmi_names,
+                        "no common entries in %s, %s" % (ps_names, wmi_names))
+
 
 @unittest.skipUnless(WINDOWS, "not a Windows system")
 class TestDualProcessImplementation(unittest.TestCase):
@@ -473,14 +488,93 @@ class TestDualProcessImplementation(unittest.TestCase):
             self.assertRaises(psutil.NoSuchProcess, meth, ZOMBIE_PID)
 
 
-def main():
-    test_suite = unittest.TestSuite()
-    test_suite.addTest(unittest.makeSuite(WindowsSpecificTestCase))
-    test_suite.addTest(unittest.makeSuite(TestDualProcessImplementation))
-    result = unittest.TextTestRunner(verbosity=2).run(test_suite)
-    return result.wasSuccessful()
+@unittest.skipUnless(WINDOWS, "not a Windows system")
+class RemoteProcessTestCase(unittest.TestCase):
+    """Certain functions require calling ReadProcessMemory.  This trivially
+    works when called on the current process.  Check that this works on other
+    processes, especially when they have a different bitness."""
+
+    @staticmethod
+    def find_other_interpreter():
+        # find a python interpreter that is of the opposite bitness from us
+        code = "import sys; sys.stdout.write(str(sys.maxsize > 2**32))"
+
+        # XXX: a different and probably more stable approach might be to access
+        # the registry but accessing 64 bit paths from a 32 bit process
+        for filename in glob.glob(r"C:\Python*\python.exe"):
+            proc = subprocess.Popen(args=[filename, "-c", code],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT)
+            output, _ = proc.communicate()
+            if output == str(not IS_64_BIT):
+                return filename
+
+    @classmethod
+    def setUpClass(cls):
+        other_python = cls.find_other_interpreter()
+
+        if other_python is None:
+            raise unittest.SkipTest(
+                    "could not find interpreter with opposite bitness")
+
+        if IS_64_BIT:
+            cls.python64 = sys.executable
+            cls.python32 = other_python
+        else:
+            cls.python64 = other_python
+            cls.python32 = sys.executable
+
+    test_args = ["-c", "import sys; sys.stdin.read()"]
+
+    def setUp(self):
+        env = os.environ.copy()
+        env["THINK_OF_A_NUMBER"] = str(os.getpid())
+        self.proc32 = get_test_subprocess([self.python32] + self.test_args,
+                                          env=env,
+                                          stdin=subprocess.PIPE)
+        self.proc64 = get_test_subprocess([self.python64] + self.test_args,
+                                          env=env,
+                                          stdin=subprocess.PIPE)
+
+    def tearDown(self):
+        self.proc32.communicate()
+        self.proc64.communicate()
+        reap_children()
+
+    @classmethod
+    def tearDownClass(cls):
+        reap_children()
+
+    def test_cmdline_32(self):
+        p = psutil.Process(self.proc32.pid)
+        self.assertEqual(len(p.cmdline()), 3)
+        self.assertEqual(p.cmdline()[1:], self.test_args)
+
+    def test_cmdline_64(self):
+        p = psutil.Process(self.proc64.pid)
+        self.assertEqual(len(p.cmdline()), 3)
+        self.assertEqual(p.cmdline()[1:], self.test_args)
+
+    def test_cwd_32(self):
+        p = psutil.Process(self.proc32.pid)
+        self.assertEqual(p.cwd(), os.getcwd())
+
+    def test_cwd_64(self):
+        p = psutil.Process(self.proc64.pid)
+        self.assertEqual(p.cwd(), os.getcwd())
+
+    def test_environ_32(self):
+        p = psutil.Process(self.proc32.pid)
+        e = p.environ()
+        self.assertIn("THINK_OF_A_NUMBER", e)
+        self.assertEquals(e["THINK_OF_A_NUMBER"], str(os.getpid()))
+
+    def test_environ_64(self):
+        p = psutil.Process(self.proc64.pid)
+        e = p.environ()
+        self.assertIn("THINK_OF_A_NUMBER", e)
+        self.assertEquals(e["THINK_OF_A_NUMBER"], str(os.getpid()))
 
 
 if __name__ == '__main__':
-    if not main():
-        sys.exit(1)
+    run_test_module_by_name(__file__)

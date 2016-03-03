@@ -49,8 +49,8 @@ Usually the files involved when adding a new functionality are:
     psutil/_ps{platform}.py       # python platform wrapper
     psutil/_psutil_{platform}.c   # C platform extension
     psutil/_psutil_{platform}.h   # C header file
-    test/test_psutil.py           # main test suite
-    test/_{platform}.py           # platform specific test suite
+    test/test_process|system.py   # main test suite
+    test/test_{platform}.py       # platform specific test suite
 
 Typical process occurring when adding a new functionality (API):
 
@@ -59,9 +59,8 @@ Typical process occurring when adding a new functionality (API):
   (e.g. ``psutil/_pslinux.py``).
 - if the change requires C code write the C implementation in
   ``psutil/_psutil_{platform}.c`` (e.g. ``psutil/_psutil_linux.c``).
-- write a cross platform test in ``test/test_psutil.py``.
-- write a platform specific test in ``test/_{platform}.py``; platform specific
-  tests usually test psutil against system CLI tools.
+- write a cross platform test in ``psutil/tests/test_{platform}.py``
+  (e.g. ``test_linux.py``).
 - update doc.
 - make a pull request.
 
@@ -109,17 +108,6 @@ An icon in the home page (README) always shows the last coverage percentage:
     :target: https://coveralls.io/github/giampaolo/psutil?branch=master
     :alt: Test coverage (coverall.io)
 
-Code quality
-------------
-
-Code quality is controlled by `scrutinizer-ci <https://scrutinizer-ci.com/g/giampaolo/psutil/>`_
-which provides a report signaling duplicated code and other amenities. It is
-controlled by `.scrutinizer.yml <https://github.com/giampaolo/psutil/blob/master/.scrutinizer.yml>`_.
-An icon in the home page always shows a code quality score:
-
-.. image:: https://img.shields.io/scrutinizer/g/giampaolo/psutil.svg
-    :target: https://scrutinizer-ci.com/g/giampaolo/psutil/
-    :alt: Code quality (scrutinizer-ci.com)
 
 =============
 Documentation

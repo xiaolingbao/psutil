@@ -40,7 +40,8 @@
 #include "../../_psutil_common.h"
 
 #define PSUTIL_KPT2DOUBLE(t) (t ## _sec + t ## _usec / 1000000.0)
-#define PSUTIL_TV2DOUBLE(t) ((t).tv_sec + (t).tv_usec / 1000000.0)
+// #define PSUTIL_TV2DOUBLE(t) ((t).tv_sec + (t).tv_usec / 1000000.0)
+
 // a signaler for connections without an actual status
 int PSUTIL_CONN_NONE = 128;
 
@@ -178,6 +179,7 @@ psutil_get_proc_list(struct kinfo_proc **procList, size_t *procCount) {
 
     result = kvm_getprocs(kd, KERN_PROC_ALL, 0, sizeof(struct kinfo_proc), &cnt);
     if (result == NULL) {
+        kvm_close(kd);
         err(1, NULL);
         return errno;
     }
@@ -187,6 +189,7 @@ psutil_get_proc_list(struct kinfo_proc **procList, size_t *procCount) {
     size_t mlen = cnt * sizeof(struct kinfo_proc);
 
     if ((*procList = malloc(mlen)) == NULL) {
+        kvm_close(kd);
         err(1, NULL);
         return errno;
     }
@@ -237,7 +240,11 @@ psutil_get_cmdline(long pid) {
         goto error;
 
     for (p = argv; *p != NULL; p++) {
+#if PY_MAJOR_VERSION >= 3
+        py_arg = PyUnicode_DecodeFSDefault(*p);
+#else
         py_arg = Py_BuildValue("s", *p);
+#endif
         if (!py_arg)
             goto error;
         if (PyList_Append(py_retlist, py_arg))
@@ -387,14 +394,13 @@ psutil_swap_mem(PyObject *self, PyObject *args) {
     }
 
     if ((swdev = calloc(nswap, sizeof(*swdev))) == NULL) {
-        PyErr_SetFromErrno(PyExc_OSError);
+        PyErr_NoMemory();
         return NULL;
     }
 
     if (swapctl(SWAP_STATS, swdev, nswap) == -1) {
-        free(swdev);
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        goto error;
     }
 
     // Total things up.
@@ -415,6 +421,10 @@ psutil_swap_mem(PyObject *self, PyObject *args) {
                          // swapent struct does not provide any info
                          // about it.
                          0, 0);
+
+error:
+    free(swdev);
+    return NULL;
 }
 
 
@@ -461,7 +471,11 @@ psutil_proc_cwd(PyObject *self, PyObject *args) {
         PyErr_SetFromErrno(PyExc_OSError);
         return NULL;
     }
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_DecodeFSDefault(path);
+#else
     return Py_BuildValue("s", path);
+#endif
 }
 
 
@@ -759,15 +773,12 @@ psutil_disk_io_counters(PyObject *self, PyObject *args) {
 
     for (i = 0; i < dk_ndrive; i++) {
         py_disk_info = Py_BuildValue(
-            "(KKKKLL)",
-            stats[i].ds_rxfer,
-            stats[i].ds_wxfer,
-            stats[i].ds_rbytes,
-            stats[i].ds_wbytes,
-            // assume half read - half writes.
-            // TODO: why?
-            (long long) PSUTIL_TV2DOUBLE(stats[i].ds_time) / 2,
-            (long long) PSUTIL_TV2DOUBLE(stats[i].ds_time) / 2);
+            "(KKKK)",
+            stats[i].ds_rxfer,  // num reads
+            stats[i].ds_wxfer,  // num writes
+            stats[i].ds_rbytes,  // read bytes
+            stats[i].ds_wbytes  // write bytes
+        );
         if (!py_disk_info)
             goto error;
         if (PyDict_SetItemString(py_retdict, stats[i].ds_name, py_disk_info))

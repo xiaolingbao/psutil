@@ -1,10 +1,87 @@
 Bug tracker at https://github.com/giampaolo/psutil/issues
 
-3.4.0 - XXXX-XX-XX
+4.1.0 - XXXX-XX-XX
+
+**Enhancements**
+
+- #777: [Linux] Process.open_files() on Linux return 3 new fields: position,
+  mode and flags.
+- #779: Process.cpu_times() returns two new fields, 'children_user' and
+  'children_system' (always set to 0 on OSX and Windows).
+
+**Bug fixes**
+
+- #774: [FreeBSD] net_io_counters() dropout is no longer set to 0 if the kernel
+  provides it.
+- #776: [Linux] Process.cpu_affinity() may erroneously raise NoSuchProcess.
+  (patch by wxwright)
+- #780: [OSX] psutil does not compile with some gcc versions.
+- #786: net_if_addrs() may report incomplete MAC addresses.
+
+
+4.0.0 - 2016-02-17
 ==================
 
 **Enhancements**
 
+- #523: [Linux, FreeBSD] disk_io_counters() return a new "busy_time" field.
+- #660: [Windows] make.bat is smarter in finding alternative VS install
+  locations.  (patch by mpderbec)
+- #732: Process.environ().  (patch by Frank Benkstein)
+- #753: [Linux, OSX, Windows] Process USS and PSS (Linux) "real" memory stats.
+  (patch by Eric Rahm)
+- #755: Process.memory_percent() "memtype" parameter.
+- #758: tests now live in psutil namespace.
+- #760: expose OS constants (psutil.LINUX, psutil.OSX, etc.)
+- #756: [Linux] disk_io_counters() return 2 new fields: read_merged_count and
+  write_merged_count.
+- #762: new scripts/procsmem.py script.
+
+**Bug fixes**
+
+- #685: [Linux] virtual_memory() provides wrong results on systems with a lot
+  of physical memory.
+- #704: [Solaris] psutil does not compile on Solaris sparc.
+- #734: on Python 3 invalid UTF-8 data is not correctly handled for process
+  name(), cwd(), exe(), cmdline() and open_files() methods resulting in
+  UnicodeDecodeError exceptions. 'surrogateescape' error handler is now
+  used as a workaround for replacing the corrupted data.
+- #737: [Windows] when the bitness of psutil and the target process was
+  different cmdline() and cwd() could return a wrong result or incorrectly
+  report an AccessDenied error.
+- #741: [OpenBSD] psutil does not compile on mips64.
+- #751: [Linux] fixed call to Py_DECREF on possible Null object.
+- #754: [Linux] cmdline() can be wrong in case of zombie process.
+- #759: [Linux] Process.memory_maps() may return paths ending with " (deleted)"
+- #761: [Windows] psutil.boot_time() wraps to 0 after 49 days.
+- #764: [NetBSD] fix compilation on NetBSD-6.x.
+- #766: [Linux] net_connections() can't handle malformed /proc/net/unix file.
+- #767: [Linux] disk_io_counters() may raise ValueError on 2.6 kernels and it's
+  broken on 2.4 kernels.
+- #770: [NetBSD] disk_io_counters() metrics didn't update.
+
+
+3.4.2 - 2016-01-20
+==================
+
+**Enhancements**
+
+- #728: [Solaris] exposed psutil.PROCFS_PATH constant to change the default
+  location of /proc filesystem.
+
+**Bug fixes**
+
+- #724: [FreeBSD] psutil.virtual_memory().total is incorrect.
+- #730: [FreeBSD] psutil.virtual_memory() crashes.
+
+
+3.4.1 - 2016-01-15
+==================
+
+**Enhancements**
+
+- #557: [NetBSD] added NetBSD support.  (contributed by Ryo Onodera and
+  Thomas Klausner)
 - #708: [Linux] psutil.net_connections() and Process.connections() on Python 2
   can be up to 3x faster in case of many connections.
   Also psutil.Process.memory_maps() is slightly faster.
@@ -15,6 +92,9 @@ Bug tracker at https://github.com/giampaolo/psutil/issues
 - #714: [OpenBSD] virtual_memory().cached value was always set to 0.
 - #715: don't crash at import time if cpu_times() fail for some reason.
 - #717: [Linux] Process.open_files fails if deleted files still visible.
+- #722: [Linux] swap_memory() no longer crashes if sin/sout can't be determined
+  due to missing /proc/vmstat.
+- #724: [FreeBSD] virtual_memory().total is slightly incorrect.
 
 
 3.3.0 - 2015-11-25
@@ -1103,11 +1183,4 @@ DeprecationWarning.
 - #23: Special case for pid_exists(0)
 - #24: [Windows] Process(0).kill() now raises AccessDenied exception instead
   of WindowsError.
-- #30: psutil.get_pid_list() was returning two instances of PID 0 on OSX and
-  FreeBSD platforms.
-
-
-0.1.0 - 2009-01-27
-==================
-
-- Initial release.
+- #30: psutil.get_pid_list() was returning two ins

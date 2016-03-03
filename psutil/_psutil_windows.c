@@ -188,7 +188,11 @@ psutil_get_nic_addresses() {
  */
 static PyObject *
 psutil_boot_time(PyObject *self, PyObject *args) {
-    double  uptime;
+#if (_WIN32_WINNT >= 0x0600)  // Windows Vista
+    ULONGLONG uptime;
+#else
+    double uptime;
+#endif
     time_t pt;
     FILETIME fileTime;
     long long ll;
@@ -212,10 +216,15 @@ psutil_boot_time(PyObject *self, PyObject *args) {
         + fileTime.dwLowDateTime;
     pt = (time_t)((ll - 116444736000000000ull) / 10000000ull);
 
-    // XXX - By using GetTickCount() time will wrap around to zero if the
+#if (_WIN32_WINNT >= 0x0600)  // Windows Vista
+    uptime = GetTickCount64() / (ULONGLONG)1000.00f;
+#else
+    // GetTickCount() time will wrap around to zero if the
     // system is run continuously for 49.7 days.
     uptime = GetTickCount() / 1000.00f;
-    return Py_BuildValue("d", (double)pt - uptime);
+#endif
+
+    return Py_BuildValue("d", (double)pt - (double)uptime);
 }
 
 
@@ -575,7 +584,6 @@ static PyObject *
 psutil_proc_cmdline(PyObject *self, PyObject *args) {
     long pid;
     int pid_return;
-    PyObject *py_retlist;
 
     if (! PyArg_ParseTuple(args, "l", &pid))
         return NULL;
@@ -588,19 +596,30 @@ psutil_proc_cmdline(PyObject *self, PyObject *args) {
     if (pid_return == -1)
         return NULL;
 
-    // XXX the assumptio below probably needs to go away
+    return psutil_get_cmdline(pid);
+}
 
-    // May fail any of several ReadProcessMemory calls etc. and
-    // not indicate a real problem so we ignore any errors and
-    // just live without commandline.
-    py_retlist = psutil_get_cmdline(pid);
-    if ( NULL == py_retlist ) {
-        // carry on anyway, clear any exceptions too
-        PyErr_Clear();
-        return Py_BuildValue("[]");
-    }
 
-    return py_retlist;
+/*
+ * Return process cmdline as a Python list of cmdline arguments.
+ */
+static PyObject *
+psutil_proc_environ(PyObject *self, PyObject *args) {
+    long pid;
+    int pid_return;
+
+    if (! PyArg_ParseTuple(args, "l", &pid))
+        return NULL;
+    if ((pid == 0) || (pid == 4))
+        return Py_BuildValue("s", "");
+
+    pid_return = psutil_pid_is_running(pid);
+    if (pid_return == 0)
+        return NoSuchProcess();
+    if (pid_return == -1)
+        return NULL;
+
+    return psutil_get_environ(pid);
 }
 
 
@@ -789,6 +808,92 @@ psutil_proc_memory_info_2(PyObject *self, PyObject *args) {
         pfault_count, m1, m2, m3, m4, m5, m6, m7, m8, private);
 }
 
+/**
+ * Returns the USS of the process.
+ * Reference:
+ * https://dxr.mozilla.org/mozilla-central/source/xpcom/base/
+ *     nsMemoryReporterManager.cpp
+ */
+static PyObject *
+psutil_proc_memory_uss(PyObject *self, PyObject *args)
+{
+    DWORD pid;
+    HANDLE proc;
+    PSAPI_WORKING_SET_INFORMATION tmp;
+    DWORD tmp_size = sizeof(tmp);
+    size_t entries;
+    size_t private_pages;
+    size_t i;
+    DWORD info_array_size;
+    PSAPI_WORKING_SET_INFORMATION* info_array;
+    SYSTEM_INFO system_info;
+    PyObject* py_result = NULL;
+    unsigned long long total = 0;
+
+    if (! PyArg_ParseTuple(args, "l", &pid))
+        return NULL;
+
+    proc = psutil_handle_from_pid(pid);
+    if (proc == NULL)
+        return NULL;
+
+    // Determine how many entries we need.
+    memset(&tmp, 0, tmp_size);
+    if (!QueryWorkingSet(proc, &tmp, tmp_size)) {
+        // NB: QueryWorkingSet is expected to fail here due to the
+        // buffer being too small.
+        if (tmp.NumberOfEntries == 0) {
+            PyErr_SetFromWindowsErr(0);
+            goto done;
+        }
+    }
+
+    // Fudge the size in case new entries are added between calls.
+    entries = tmp.NumberOfEntries * 2;
+
+    if (!entries) {
+        goto done;
+    }
+
+    info_array_size = tmp_size + (entries * sizeof(PSAPI_WORKING_SET_BLOCK));
+    info_array = (PSAPI_WORKING_SET_INFORMATION*)malloc(info_array_size);
+    if (!info_array) {
+        PyErr_NoMemory();
+        goto done;
+    }
+
+    if (!QueryWorkingSet(proc, info_array, info_array_size)) {
+        PyErr_SetFromWindowsErr(0);
+        goto done;
+    }
+
+    entries = (size_t)info_array->NumberOfEntries;
+    private_pages = 0;
+    for (i = 0; i < entries; i++) {
+        // Count shared pages that only one process is using as private.
+        if (!info_array->WorkingSetInfo[i].Shared ||
+                info_array->WorkingSetInfo[i].ShareCount <= 1) {
+            private_pages++;
+        }
+    }
+
+    // GetSystemInfo has no return value.
+    GetSystemInfo(&system_info);
+    total = private_pages * system_info.dwPageSize;
+    py_result = Py_BuildValue("K", total);
+
+done:
+    if (proc) {
+        CloseHandle(proc);
+    }
+
+    if (info_array) {
+        free(info_array);
+    }
+
+    return py_result;
+}
+
 
 /*
  * Return a Python integer indicating the total amount of physical memory
@@ -936,108 +1041,18 @@ error:
 static PyObject *
 psutil_proc_cwd(PyObject *self, PyObject *args) {
     long pid;
-    HANDLE processHandle = NULL;
-    PVOID pebAddress;
-    PVOID rtlUserProcParamsAddress;
-    UNICODE_STRING currentDirectory;
-    WCHAR *currentDirectoryContent = NULL;
-    PyObject *py_unicode = NULL;
+    int pid_return;
 
     if (! PyArg_ParseTuple(args, "l", &pid))
         return NULL;
 
-    processHandle = psutil_handle_from_pid(pid);
-    if (processHandle == NULL)
+    pid_return = psutil_pid_is_running(pid);
+    if (pid_return == 0)
+        return NoSuchProcess();
+    if (pid_return == -1)
         return NULL;
 
-    pebAddress = psutil_get_peb_address(processHandle);
-
-    // get the address of ProcessParameters
-#ifdef _WIN64
-    if (!ReadProcessMemory(processHandle, (PCHAR)pebAddress + 32,
-                           &rtlUserProcParamsAddress, sizeof(PVOID), NULL))
-#else
-    if (!ReadProcessMemory(processHandle, (PCHAR)pebAddress + 0x10,
-                           &rtlUserProcParamsAddress, sizeof(PVOID), NULL))
-#endif
-    {
-        CloseHandle(processHandle);
-        if (GetLastError() == ERROR_PARTIAL_COPY) {
-            // this occurs quite often with system processes
-            return AccessDenied();
-        }
-        else {
-            return PyErr_SetFromWindowsErr(0);
-        }
-    }
-
-    // Read the currentDirectory UNICODE_STRING structure.
-    // 0x24 refers to "CurrentDirectoryPath" of RTL_USER_PROCESS_PARAMETERS
-    // structure, see:
-    // http://wj32.wordpress.com/2009/01/24/
-    //     howto-get-the-command-line-of-processes/
-#ifdef _WIN64
-    if (!ReadProcessMemory(processHandle, (PCHAR)rtlUserProcParamsAddress + 56,
-                           &currentDirectory, sizeof(currentDirectory), NULL))
-#else
-    if (!ReadProcessMemory(processHandle,
-                           (PCHAR)rtlUserProcParamsAddress + 0x24,
-                           &currentDirectory, sizeof(currentDirectory), NULL))
-#endif
-    {
-        CloseHandle(processHandle);
-        if (GetLastError() == ERROR_PARTIAL_COPY) {
-            // this occurs quite often with system processes
-            return AccessDenied();
-        }
-        else {
-            return PyErr_SetFromWindowsErr(0);
-        }
-    }
-
-    // allocate memory to hold cwd
-    currentDirectoryContent = (WCHAR *)malloc(currentDirectory.Length + 1);
-    if (currentDirectoryContent == NULL) {
-        PyErr_NoMemory();
-        goto error;
-    }
-
-    // read cwd
-    if (!ReadProcessMemory(processHandle, currentDirectory.Buffer,
-                           currentDirectoryContent, currentDirectory.Length,
-                           NULL))
-    {
-        if (GetLastError() == ERROR_PARTIAL_COPY) {
-            // this occurs quite often with system processes
-            AccessDenied();
-        }
-        else {
-            PyErr_SetFromWindowsErr(0);
-        }
-        goto error;
-    }
-
-    // null-terminate the string to prevent wcslen from returning
-    // incorrect length the length specifier is in characters, but
-    // currentDirectory.Length is in bytes
-    currentDirectoryContent[(currentDirectory.Length / sizeof(WCHAR))] = '\0';
-
-    // convert wchar array to a Python unicode string
-    py_unicode = PyUnicode_FromWideChar(
-        currentDirectoryContent, wcslen(currentDirectoryContent));
-    if (py_unicode == NULL)
-        goto error;
-    CloseHandle(processHandle);
-    free(currentDirectoryContent);
-    return py_unicode;
-
-error:
-    Py_XDECREF(py_unicode);
-    if (currentDirectoryContent != NULL)
-        free(currentDirectoryContent);
-    if (processHandle != NULL)
-        CloseHandle(processHandle);
-    return NULL;
+    return psutil_get_cwd(pid);
 }
 
 
@@ -3062,7 +3077,7 @@ psutil_net_if_stats(PyObject *self, PyObject *args) {
         );
         if (!py_ifc_info)
             goto error;
-        if (PyDict_SetItemString(py_retdict, py_nic_name, py_ifc_info))
+        if (PyDict_SetItem(py_retdict, py_nic_name, py_ifc_info))
             goto error;
         Py_DECREF(py_nic_name);
         Py_DECREF(py_ifc_info);
@@ -3094,6 +3109,8 @@ PsutilMethods[] = {
 
     {"proc_cmdline", psutil_proc_cmdline, METH_VARARGS,
      "Return process cmdline as a list of cmdline arguments"},
+    {"proc_environ", psutil_proc_environ, METH_VARARGS,
+     "Return process environment data"},
     {"proc_exe", psutil_proc_exe, METH_VARARGS,
      "Return path of the process executable"},
     {"proc_name", psutil_proc_name, METH_VARARGS,
@@ -3109,6 +3126,8 @@ PsutilMethods[] = {
      "Return a tuple of process memory information"},
     {"proc_memory_info_2", psutil_proc_memory_info_2, METH_VARARGS,
      "Alternate implementation"},
+    {"proc_memory_uss", psutil_proc_memory_uss, METH_VARARGS,
+     "Return the USS of the process"},
     {"proc_cwd", psutil_proc_cwd, METH_VARARGS,
      "Return process current working directory"},
     {"proc_suspend", psutil_proc_suspend, METH_VARARGS,

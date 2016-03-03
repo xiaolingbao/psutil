@@ -23,8 +23,10 @@ if "%PYTHON%" == "" (
     set PYTHON=C:\Python27\python.exe
 )
 if "%TSCRIPT%" == "" (
-    set TSCRIPT=test\test_psutil.py
+    set TSCRIPT=psutil\tests\runner.py
 )
+
+set VSINSTALLDIR=%VS90COMNTOOLS%..\..
 
 set PYTHON26=C:\Python26\python.exe
 set PYTHON27=C:\Python27\python.exe
@@ -52,7 +54,8 @@ if "%1" == "help" (
     echo   clean         clean build files
     echo   flake8        run flake8
     echo   install       compile and install
-    echo   setup-dev-env install pip, pywin32, wheels, etc. for all python versions
+    echo   setup-dev-env install/upgrade pip, pywin32, wheels, etc.
+    echo   setup-dev-env-all same as above, for all python versions
     echo   test          run tests
     echo   test-memleaks run memory leak tests
     echo   test-process  run process related tests
@@ -77,7 +80,7 @@ if "%1" == "clean" (
 
 if "%1" == "build" (
     :build
-    "C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC\bin\vcvars64.bat"
+    "%VSINSTALLDIR%\VC\bin\vcvars64.bat"
     %PYTHON% setup.py build
     if %errorlevel% neq 0 goto :error
 	rem copies *.pyd files in ./psutil directory in order to allow
@@ -91,7 +94,7 @@ if "%1" == "build" (
 if "%1" == "install" (
     :install
     call :build
-    %PYTHON% setup.py install
+    %PYTHON% setup.py develop
     goto :eof
 )
 
@@ -113,13 +116,19 @@ if "%1" == "test" (
 
 if "%1" == "test-process" (
     call :install
-    %PYTHON% -m unittest -v test.test_psutil.TestProcess
+    %PYTHON% -m unittest -v psutil.tests.test_process
     goto :eof
 )
 
 if "%1" == "test-system" (
     call :install
-    %PYTHON% -m unittest -v test.test_psutil.TestSystem
+    %PYTHON% -m unittest -v psutil.tests.test_system
+    goto :eof
+)
+
+if "%1" == "test-by-name" (
+    call :install
+    %PYTHON% -m nose psutil\tests\test_process.py psutil\tests\test_system.py psutil\tests\test_windows.py psutil\tests\test_misc.py --nocapture -v -m %2
     goto :eof
 )
 
@@ -131,7 +140,7 @@ if "%1" == "test-memleaks" (
 
 if "%1" == "build-all" (
     :build-all
-    "C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC\bin\vcvars64.bat"
+    "%VSINSTALLDIR%\VC\bin\vcvars64.bat"
     for %%P in (%ALL_PYTHONS%) do (
         @echo ------------------------------------------------
         @echo building exe for %%P
@@ -148,7 +157,7 @@ if "%1" == "build-all" (
 
 if "%1" == "upload-all" (
     :upload-exes
-    "C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC\bin\vcvars64.bat"
+    "%VSINSTALLDIR%\VC\bin\vcvars64.bat"
     for %%P in (%ALL_PYTHONS%) do (
         @echo ------------------------------------------------
         @echo uploading exe for %%P
@@ -165,27 +174,54 @@ if "%1" == "upload-all" (
 
 if "%1" == "setup-dev-env" (
     :setup-env
+    if not exist get-pip.py (
+        @echo ------------------------------------------------
+        @echo downloading pip installer
+        @echo ------------------------------------------------
+        C:\python27\python.exe -c "import urllib2; r = urllib2.urlopen('https://bootstrap.pypa.io/get-pip.py'); open('get-pip.py', 'wb').write(r.read())"
+    )
     @echo ------------------------------------------------
-    @echo downloading pip installer
+    @echo installing pip for %PYTHON%
     @echo ------------------------------------------------
-    C:\python27\python.exe -c "import urllib2; r = urllib2.urlopen('https://raw.github.com/pypa/pip/master/contrib/get-pip.py'); open('get-pip.py', 'wb').write(r.read())"
+    %PYTHON% get-pip.py
+    @echo ------------------------------------------------
+    @echo upgrade pip for %PYTHON%
+    @echo ------------------------------------------------
+    %PYTHON% -m pip install pip --upgrade
+    @echo ------------------------------------------------
+    @echo installing deps
+    @echo ------------------------------------------------
+    rem mandatory / for unittests
+    %PYTHON% -m pip install unittest2 ipaddress mock wmi wheel pypiwin32 --upgrade
+    rem nice to have
+    rem %PYTHON% -m pip install ipdb nose --upgrade
+    goto :eof
+)
+
+if "%1" == "setup-dev-env-all" (
+    :setup-env
+    if not exist get-pip.py (
+        @echo ------------------------------------------------
+        @echo downloading pip installer
+        @echo ------------------------------------------------
+        C:\python27\python.exe -c "import urllib2; r = urllib2.urlopen('https://bootstrap.pypa.io/get-pip.py'); open('get-pip.py', 'wb').write(r.read())"
+    )
     for %%P in (%ALL_PYTHONS%) do (
         @echo ------------------------------------------------
         @echo installing pip for %%P
         @echo ------------------------------------------------
         %%P get-pip.py
-    )
-    for %%P in (%ALL_PYTHONS%) do (
         @echo ------------------------------------------------
         @echo installing deps for %%P
         @echo ------------------------------------------------
         rem mandatory / for unittests
         %%P -m pip install unittest2 ipaddress mock wmi wheel pypiwin32 --upgrade
         rem nice to have
-        %%P -m pip install ipdb pep8 pyflakes flake8 --upgrade
+        rem %%P -m pip install ipdb nose --upgrade
     )
     goto :eof
 )
+
 
 if "%1" == "flake8" (
     :flake8

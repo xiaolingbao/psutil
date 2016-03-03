@@ -14,34 +14,30 @@ import functools
 import gc
 import os
 import socket
-import sys
 import threading
 import time
 
+
 import psutil
 import psutil._common
+from psutil import FREEBSD
+from psutil import LINUX
+from psutil import OPENBSD
+from psutil import OSX
+from psutil import POSIX
+from psutil import SUNOS
+from psutil import WINDOWS
+from psutil._common import supports_ipv6
 from psutil._compat import callable
 from psutil._compat import xrange
-from test_psutil import FREEBSD
-from test_psutil import get_test_subprocess
-from test_psutil import LINUX
-from test_psutil import OPENBSD
-from test_psutil import OSX
-from test_psutil import POSIX
-from test_psutil import reap_children
-from test_psutil import RLIMIT_SUPPORT
-from test_psutil import safe_remove
-from test_psutil import SUNOS
-from test_psutil import supports_ipv6
-from test_psutil import TESTFN
-from test_psutil import TRAVIS
-from test_psutil import WINDOWS
-
-if sys.version_info < (2, 7):
-    import unittest2 as unittest  # https://pypi.python.org/pypi/unittest2
-else:
-    import unittest
-
+from psutil.tests import get_test_subprocess
+from psutil.tests import reap_children
+from psutil.tests import RLIMIT_SUPPORT
+from psutil.tests import run_test_module_by_name
+from psutil.tests import safe_remove
+from psutil.tests import TESTFN
+from psutil.tests import TRAVIS
+from psutil.tests import unittest
 
 LOOPS = 1000
 MEMORY_TOLERANCE = 4096
@@ -229,9 +225,11 @@ class TestProcessObjectLeaks(Base):
     def test_memory_info(self):
         self.execute('memory_info')
 
-    @skip_if_linux()
-    def test_memory_info_ex(self):
-        self.execute('memory_info_ex')
+    # also available on Linux but it's pure python
+    @unittest.skipUnless(OSX or WINDOWS,
+                         "not available on this platform")
+    def test_memory_full_info(self):
+        self.execute('memory_full_info')
 
     @unittest.skipUnless(POSIX, "POSIX only")
     @skip_if_linux()
@@ -321,6 +319,11 @@ class TestProcessObjectLeaks(Base):
         finally:
             for s in socks:
                 s.close()
+
+    @unittest.skipUnless(hasattr(psutil.Process, 'environ'),
+                         "Linux, OSX and Windows")
+    def test_environ(self):
+        self.execute("environ")
 
 
 p = get_test_subprocess()
@@ -440,16 +443,5 @@ class TestModuleFunctionsLeaks(Base):
         self.execute('net_if_stats')
 
 
-def main():
-    test_suite = unittest.TestSuite()
-    tests = [TestProcessObjectLeaksZombie,
-             TestProcessObjectLeaks,
-             TestModuleFunctionsLeaks]
-    for test in tests:
-        test_suite.addTest(unittest.makeSuite(test))
-    result = unittest.TextTestRunner(verbosity=2).run(test_suite)
-    return result.wasSuccessful()
-
 if __name__ == '__main__':
-    if not main():
-        sys.exit(1)
+    run_test_module_by_name(__file__)

@@ -254,7 +254,11 @@ psutil_get_cmdline(long pid) {
     // separator
     if (argsize > 0) {
         while (pos < argsize) {
+#if PY_MAJOR_VERSION >= 3
+            py_arg = PyUnicode_DecodeFSDefault(&argstr[pos]);
+#else
             py_arg = Py_BuildValue("s", &argstr[pos]);
+#endif
             if (!py_arg)
                 goto error;
             if (PyList_Append(py_retlist, py_arg))
@@ -317,6 +321,7 @@ psutil_proc_exe(PyObject *self, PyObject *args) {
     int mib[4];
     int ret;
     size_t size;
+    const char *encoding_errs;
 
     if (! PyArg_ParseTuple(args, "l", &pid))
         return NULL;
@@ -341,7 +346,13 @@ psutil_proc_exe(PyObject *self, PyObject *args) {
         else
             strcpy(pathname, "");
     }
+
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_DecodeFSDefault(pathname);
+#else
     return Py_BuildValue("s", pathname);
+#endif
+
 }
 
 
@@ -473,7 +484,8 @@ error:
  */
 PyObject *
 psutil_virtual_mem(PyObject *self, PyObject *args) {
-    unsigned int   total, active, inactive, wired, cached, free;
+    unsigned long  total;
+    unsigned int   active, inactive, wired, cached, free;
     size_t         size = sizeof(total);
     struct vmtotal vm;
     int            mib[] = {CTL_VM, VM_METER};
@@ -485,7 +497,7 @@ psutil_virtual_mem(PyObject *self, PyObject *args) {
 #endif
     size_t buffers_size = sizeof(buffers);
 
-    if (sysctlbyname("vm.stats.vm.v_page_count", &total, &size, NULL, 0))
+    if (sysctlbyname("hw.physmem", &total, &size, NULL, 0))
         goto error;
     if (sysctlbyname("vm.stats.vm.v_active_count", &active, &size, NULL, 0))
         goto error;
@@ -506,7 +518,7 @@ psutil_virtual_mem(PyObject *self, PyObject *args) {
         goto error;
 
     return Py_BuildValue("KKKKKKKK",
-        (unsigned long long) total    * pagesize,
+        (unsigned long long) total,
         (unsigned long long) free     * pagesize,
         (unsigned long long) active   * pagesize,
         (unsigned long long) inactive * pagesize,
@@ -573,6 +585,7 @@ psutil_proc_cwd(PyObject *self, PyObject *args) {
     struct kinfo_file *freep = NULL;
     struct kinfo_file *kif;
     struct kinfo_proc kipp;
+    const char *encoding_errs;
     PyObject *py_path = NULL;
 
     int i, cnt;
@@ -591,7 +604,11 @@ psutil_proc_cwd(PyObject *self, PyObject *args) {
     for (i = 0; i < cnt; i++) {
         kif = &freep[i];
         if (kif->kf_fd == KF_FD_TYPE_CWD) {
+#if PY_MAJOR_VERSION >= 3
+            py_path = PyUnicode_DecodeFSDefault(kif->kf_path);
+#else
             py_path = Py_BuildValue("s", kif->kf_path);
+#endif
             if (!py_path)
                 goto error;
             break;
@@ -742,13 +759,14 @@ psutil_disk_io_counters(PyObject *self, PyObject *args) {
                  current.unit_number);
 
         py_disk_info = Py_BuildValue(
-            "(KKKKLL)",
+            "(KKKKLLL)",
             current.operations[DEVSTAT_READ],   // no reads
             current.operations[DEVSTAT_WRITE],  // no writes
             current.bytes[DEVSTAT_READ],        // bytes read
             current.bytes[DEVSTAT_WRITE],       // bytes written
             (long long) PSUTIL_BT2MSEC(current.duration[DEVSTAT_READ]),  // r time
-            (long long) PSUTIL_BT2MSEC(current.duration[DEVSTAT_WRITE])  // w time
+            (long long) PSUTIL_BT2MSEC(current.duration[DEVSTAT_WRITE]),  // w time
+            (long long) PSUTIL_BT2MSEC(current.busy_time)  // busy time
         );      // finished transactions
         if (!py_disk_info)
             goto error;

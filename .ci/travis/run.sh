@@ -11,8 +11,14 @@ if [[ "$(uname -s)" == 'Darwin' ]]; then
 fi
 
 python setup.py build
-python setup.py install
-coverage run test/test_psutil.py --include="psutil/*" --omit="test/*,*setup*"
-python test/test_memory_leaks.py
+python setup.py develop
+
+if [[ "$(uname -s)" != 'Darwin' ]]; then
+    coverage run psutil/tests/runner.py --include="psutil/*" --omit="test/*,*setup*"
+else
+    python psutil/tests/runner.py
+fi
+
+python psutil/tests/test_memory_leaks.py
 flake8
 pep8
