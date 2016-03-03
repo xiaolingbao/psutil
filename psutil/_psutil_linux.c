@@ -551,11 +551,6 @@ error:
 }
 
 
-static PyObject*
-psutil_sysctl_info(PyObject* self, PyObject* args) {
-    return Py_BuildValue("s", "ciao");
-}
-
 /*
  * Define the psutil C module methods and initialize the module.
  */
@@ -584,8 +579,6 @@ PsutilMethods[] = {
      "Return currently connected users as a list of tuples"},
     {"net_if_stats", psutil_net_if_stats, METH_VARARGS,
      "Return NIC stats (isup, duplex, speed, mtu)"},
-    {"sysctl_info", psutil_sysctl_info, METH_VARARGS,
-     "Return various system info."},
 
     // --- linux specific
 
