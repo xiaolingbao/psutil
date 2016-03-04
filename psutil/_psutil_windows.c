@@ -3111,6 +3111,67 @@ error:
 }
 
 
+static PyObject *
+psutil_sysinfo(PyObject *self, PyObject *args) {
+    // NtQuerySystemInformation stuff
+    typedef DWORD (_stdcall * NTQSI_PROC) (int, PVOID, ULONG, PULONG);
+    NTQSI_PROC NtQuerySystemInformation;
+    HINSTANCE hNtDll;
+
+    NTSTATUS status;
+    _SYSTEM_PERFORMANCE_INFORMATION *sppi = NULL;
+    SYSTEM_INFO si;
+
+    // obtain NtQuerySystemInformation
+    hNtDll = LoadLibrary(TEXT("ntdll.dll"));
+    if (hNtDll == NULL) {
+        PyErr_SetFromWindowsErr(0);
+        goto error;
+    }
+    NtQuerySystemInformation = (NTQSI_PROC)GetProcAddress(
+        hNtDll, "NtQuerySystemInformation");
+    if (NtQuerySystemInformation == NULL) {
+        PyErr_SetFromWindowsErr(0);
+        goto error;
+    }
+
+    // retrives number of processors
+    GetSystemInfo(&si);
+
+    // allocates an array of _SYSTEM_PERFORMANCE_INFORMATION
+    // structures, one per processor
+    sppi = (_SYSTEM_PERFORMANCE_INFORMATION *) \
+           malloc(si.dwNumberOfProcessors * \
+                  sizeof(_SYSTEM_PERFORMANCE_INFORMATION));
+    if (sppi == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+
+    // gets cpu time informations
+    status = NtQuerySystemInformation(
+        SystemPerformanceInformation,
+        sppi,
+        si.dwNumberOfProcessors * sizeof(_SYSTEM_PERFORMANCE_INFORMATION),
+        NULL);
+    if (status != 0) {
+        PyErr_SetFromWindowsErr(0);
+        goto error;
+    }
+
+    free(sppi);
+    FreeLibrary(hNtDll);
+    return Py_BuildValue("kk", sppi->ContextSwitches, sppi->SystemCalls);
+
+error:
+    if (sppi)
+        free(sppi);
+    if (hNtDll)
+        FreeLibrary(hNtDll);
+    return NULL;
+}
+
+
 // ------------------------ Python init ---------------------------
 
 static PyMethodDef
@@ -3215,6 +3276,8 @@ PsutilMethods[] = {
      "Return NICs addresses."},
     {"net_if_stats", psutil_net_if_stats, METH_VARARGS,
      "Return NICs stats."},
+    {"sysinfo", psutil_sysinfo, METH_VARARGS,
+     "Return various system info."},
 
     // --- windows API bindings
     {"win32_QueryDosDevice", psutil_win32_QueryDosDevice, METH_VARARGS,

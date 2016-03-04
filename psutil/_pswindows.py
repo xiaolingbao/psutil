@@ -97,6 +97,8 @@ ntpinfo = namedtuple(
     'ntpinfo', ['num_handles', 'ctx_switches', 'user_time', 'kernel_time',
                 'create_time', 'num_threads', 'io_rcount', 'io_wcount',
                 'io_rbytes', 'io_wbytes'])
+ssysinfo = namedtuple(
+    'ssysinfo', ['ctx_switches', 'syscalls'])
 
 # set later from __init__.py
 NoSuchProcess = None
@@ -267,6 +269,11 @@ def users():
         nt = _common.suser(user, None, hostname, tstamp)
         retlist.append(nt)
     return retlist
+
+
+def sysinfo():
+    ctx_switches, syscalls = cext.sysinfo()
+    return ssysinfo(ctx_switches, syscalls)
 
 
 pids = cext.pids
