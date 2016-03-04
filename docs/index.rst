@@ -550,7 +550,7 @@ Other system info
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
      | procs_blocked |         | syscalls     | interrupts   | max_procs  | max_procs   | max_procs    |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | ctx_switches  |         | interrupts   | num_threads  | max_pid    | max_threads | ctx_switches |
+     | ctx_switches  |         | dpcs         | num_threads  | max_pid    | max_threads | ctx_switches |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
      | open_files    |         |              | traps        | open_files | open_files  | interrupts   |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
@@ -573,7 +573,7 @@ Other system info
   - **open_files** (Linux, FreeBSD):
     total number of opened file descriptors (regular files, sockets, etc.),
     system-wide.
-  - **interrupts** (Linux, Windows):
+  - **interrupts** (Linux):
     number of total system-wide interrupts since boot (cumulative, always
     increasing).
   - **max_threads** (Linux): maximum number of threads which can be run,
@@ -586,6 +586,7 @@ Other system info
   - **num_threads** (OpenBSD): total number of running threads, system-wide.
   - **traps** (SunOS): number of kernel traps.
   - **syscalls** (Windows, SunOS): number of syscalls.
+  - **pdcs** (Windows): number of deferred procedure calls.
 
   Example (Linux):
 

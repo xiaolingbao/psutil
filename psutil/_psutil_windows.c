@@ -3126,7 +3126,7 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
     _SYSTEM_INTERRUPT_INFORMATION *InterruptInformation = NULL;
     SYSTEM_INFO si;
     UINT i;
-    ULONG64 interrupts = 0;
+    ULONG64 dpc = 0;
 
     // obtain NtQuerySystemInformation
     hNtDll = LoadLibrary(TEXT("ntdll.dll"));
@@ -3175,7 +3175,7 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         goto error;
     }
 
-    // get interrupts
+    // get DPCs
     status = NtQuerySystemInformation(
         SystemInterruptInformation,
         InterruptInformation,
@@ -3186,7 +3186,7 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         goto error;
     }
     for (i = 0; i < si.dwNumberOfProcessors; i++) {
-        interrupts += InterruptInformation[i].DpcCount;
+        dpc += InterruptInformation[i].DpcCount;
     }
 
     // done
@@ -3197,7 +3197,7 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         "kkk",
         spi->ContextSwitches,
         spi->SystemCalls,
-        (unsigned long)interrupts
+        (unsigned long)dpc
     );
 
 error:
