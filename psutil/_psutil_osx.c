@@ -1797,6 +1797,9 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
     kern_return_t ret;
     mach_msg_type_number_t count = sizeof(vmstat) / sizeof(integer_t);
     mach_port_t mport = mach_host_self();
+    size_t int_size = sizeof(int);
+    int maxproc;
+    int maxfiles;
 
     ret = host_statistics(mport, HOST_VM_INFO, (host_info_t)&vmstat, &count);
     if (ret != KERN_SUCCESS) {
@@ -1806,11 +1809,22 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
     }
     mach_port_deallocate(mach_task_self(), mport);
 
+    if (sysctlbyname("kern.maxproc", &maxproc, &int_size, NULL, 0)) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+    if (sysctlbyname("kern.maxfiles", &maxfiles, &int_size, NULL, 0)) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
     return Py_BuildValue(
-        "III",
+        "IIIii",
         vmstat.v_swtch,  // ctx switches
         vmstat.v_intr,  // interrupts
-        vmstat.v_syscall  // syscalls
+        vmstat.v_syscall,  // syscalls
+        maxproc,
+        maxfiles
     );
 }
 

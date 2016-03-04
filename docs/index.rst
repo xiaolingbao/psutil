@@ -552,9 +552,9 @@ Other system info
      +---------------+--------------+--------------+--------------+------------+-------------+--------------+
      | ctx_switches  | syscalls     | dpcs         | num_threads  | max_pid    | max_threads | ctx_switches |
      +---------------+--------------+--------------+--------------+------------+-------------+--------------+
-     | open_files    |              | syscalls     | traps        | open_files | open_files  | interrupts   |
+     | open_files    | max_procs    | syscalls     | traps        | open_files | open_files  | interrupts   |
      +---------------+--------------+--------------+--------------+------------+-------------+--------------+
-     | interrupts    |              |              | syscalls     |            | num_threads |              |
+     | interrupts    | max_files    |              | syscalls     |            | num_threads |              |
      +---------------+--------------+--------------+--------------+------------+-------------+--------------+
      | max_threads   |              |              |              |            |             |              |
      +---------------+--------------+--------------+--------------+------------+-------------+--------------+
@@ -578,10 +578,10 @@ Other system info
     increasing).
   - **max_threads** (Linux): maximum number of threads which can be run,
     system-wide.
-  - **max_files** (Linux, FreeBSD):
+  - **max_files** (Linux, OSX, FreeBSD):
     maximum number of files which can be opened, system-wide.
   - **max_pid**  (Linux, FreeBSD): the highest possible PID number.
-  - **max_procs** (FreeBSD): maximum number of processes which can be run,
+  - **max_procs** (Linux, OSX, FreeBSD): maximum number of processes which can be run,
     system-wide.
   - **num_threads** (OpenBSD): total number of running threads, system-wide.
   - **traps** (SunOS): number of kernel traps.

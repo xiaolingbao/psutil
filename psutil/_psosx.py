@@ -60,6 +60,9 @@ svmem = namedtuple(
 
 pmem = namedtuple('pmem', ['rss', 'vms', 'pfaults', 'pageins'])
 pfullmem = namedtuple('pfullmem', pmem._fields + ('uss', ))
+ssysinfo = namedtuple(
+    'ssysinfo', ['ctx_switches', 'interrupts', 'syscalls', 'max_procs',
+                 'max_files'])
 
 pmmap_grouped = namedtuple(
     'pmmap_grouped',
@@ -155,7 +158,8 @@ def users():
 
 
 def sysinfo():
-    return cext.sysinfo()
+    ctx_switches, interrupts, syscalls, max_procs, max_files = cext.sysinfo()
+    return ssysinfo(ctx_switches, interrupts, syscalls, max_procs, max_files)
 
 
 def net_connections(kind='inet'):

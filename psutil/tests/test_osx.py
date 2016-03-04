@@ -142,6 +142,14 @@ class TestSystemAPIs(unittest.TestCase):
         num = sysctl("sysctl hw.physicalcpu")
         self.assertEqual(num, psutil.cpu_count(logical=False))
 
+    def test_sysinfo_max_procs(self):
+        num = sysctl("sysctl kern.maxproc")
+        self.assertEqual(num, psutil.sysinfo().max_procs)
+
+    def test_sysinfo_max_files(self):
+        num = sysctl("sysctl kern.maxfiles")
+        self.assertEqual(num, psutil.sysinfo().max_files)
+
     # --- virtual mem
 
     def test_vmem_total(self):
