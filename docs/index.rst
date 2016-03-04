@@ -548,11 +548,11 @@ Other system info
      +===============+=========+==============+==============+============+=============+==============+
      | procs_running |         | ctx_switches | ctx_switches | max_files  | max_files   | max_files    |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | procs_blocked |         | syscalls     | interrupts   | max_procs  | max_procs   | max_procs    |
+     | procs_blocked |         | interrupts   | interrupts   | max_procs  | max_procs   | max_procs    |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
      | ctx_switches  |         | dpcs         | num_threads  | max_pid    | max_threads | ctx_switches |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | open_files    |         |              | traps        | open_files | open_files  | interrupts   |
+     | open_files    |         | syscalls     | traps        | open_files | open_files  | interrupts   |
      +---------------+---------+--------------+--------------+------------+-------------+--------------+
      | interrupts    |         |              | syscalls     |            | num_threads |              |
      +--------+------+---------+--------------+--------------+------------+-------------+--------------+
@@ -573,7 +573,7 @@ Other system info
   - **open_files** (Linux, FreeBSD):
     total number of opened file descriptors (regular files, sockets, etc.),
     system-wide.
-  - **interrupts** (Linux):
+  - **interrupts** (Linux, Windows, NetBSD, SunOS):
     number of total system-wide interrupts since boot (cumulative, always
     increasing).
   - **max_threads** (Linux): maximum number of threads which can be run,
@@ -596,7 +596,7 @@ Other system info
      >>> psutil.sysinfo()
      ssysinfo(procs_running=4, procs_blocked=0, ctx_switches=98242, files=5056, max_files=1001723, max_threads=157492, max_pid=32768)
 
-  .. versionadded:: 3.4.0
+  .. versionadded:: 4.1.0
 
 
 Processes

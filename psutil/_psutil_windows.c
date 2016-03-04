@@ -956,7 +956,7 @@ psutil_per_cpu_times(PyObject *self, PyObject *args) {
 
     float idle, kernel, user;
     NTSTATUS status;
-    SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *sppi = NULL;
+    _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *sppi = NULL;
     SYSTEM_INFO si;
     UINT i;
     PyObject *py_tuple = NULL;
@@ -983,9 +983,9 @@ psutil_per_cpu_times(PyObject *self, PyObject *args) {
 
     // allocates an array of SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION
     // structures, one per processor
-    sppi = (SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *) \
+    sppi = (_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *) \
            malloc(si.dwNumberOfProcessors * \
-                  sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION));
+                  sizeof(_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION));
     if (sppi == NULL) {
         PyErr_NoMemory();
         goto error;
@@ -996,7 +996,7 @@ psutil_per_cpu_times(PyObject *self, PyObject *args) {
         SystemProcessorPerformanceInformation,
         sppi,
         si.dwNumberOfProcessors * sizeof
-            (SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION),
+            (_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION),
         NULL);
     if (status != 0) {
         PyErr_SetFromWindowsErr(0);
@@ -3123,10 +3123,12 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
 
     NTSTATUS status;
     _SYSTEM_PERFORMANCE_INFORMATION *spi = NULL;
+    _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *sppi = NULL;
     _SYSTEM_INTERRUPT_INFORMATION *InterruptInformation = NULL;
     SYSTEM_INFO si;
     UINT i;
-    ULONG64 dpc = 0;
+    ULONG64 dpcs = 0;
+    ULONG interrupts = 0;
 
     // obtain NtQuerySystemInformation
     hNtDll = LoadLibrary(TEXT("ntdll.dll"));
@@ -3144,8 +3146,7 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
     // retrives number of processors
     GetSystemInfo(&si);
 
-    // allocates an array of _SYSTEM_PERFORMANCE_INFORMATION
-    // structures, one per processor
+    // get syscalls / ctx switches
     spi = (_SYSTEM_PERFORMANCE_INFORMATION *) \
            malloc(si.dwNumberOfProcessors * \
                   sizeof(_SYSTEM_PERFORMANCE_INFORMATION));
@@ -3153,8 +3154,6 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         PyErr_NoMemory();
         goto error;
     }
-
-    // get syscalls / ctx switches
     status = NtQuerySystemInformation(
         SystemPerformanceInformation,
         spi,
@@ -3165,8 +3164,7 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         goto error;
     }
 
-    // allocates an array of SYSTEM_INTERRUPT_INFORMATION
-    // structures, one per processor
+    // get DPCs
     InterruptInformation = \
         malloc(sizeof(_SYSTEM_INTERRUPT_INFORMATION) *
                si.dwNumberOfProcessors);
@@ -3174,8 +3172,6 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         PyErr_NoMemory();
         goto error;
     }
-
-    // get DPCs
     status = NtQuerySystemInformation(
         SystemInterruptInformation,
         InterruptInformation,
@@ -3186,18 +3182,44 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         goto error;
     }
     for (i = 0; i < si.dwNumberOfProcessors; i++) {
-        dpc += InterruptInformation[i].DpcCount;
+        dpcs += InterruptInformation[i].DpcCount;
     }
+
+    // get interrupts
+    sppi = (_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *) \
+        malloc(si.dwNumberOfProcessors * \
+               sizeof(_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION));
+    if (sppi == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+
+    status = NtQuerySystemInformation(
+        SystemProcessorPerformanceInformation,
+        sppi,
+        si.dwNumberOfProcessors * sizeof
+            (_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION),
+        NULL);
+    if (status != 0) {
+        PyErr_SetFromWindowsErr(0);
+        goto error;
+    }
+
+    for (i = 0; i < si.dwNumberOfProcessors; i++) {
+        interrupts += sppi[i].InterruptCount;
+    }
+
 
     // done
     free(spi);
     free(InterruptInformation);
     FreeLibrary(hNtDll);
     return Py_BuildValue(
-        "kkk",
+        "kkkk",
         spi->ContextSwitches,
-        spi->SystemCalls,
-        (unsigned long)dpc
+        interrupts,
+        (unsigned long)dpcs,
+        spi->SystemCalls
     );
 
 error:

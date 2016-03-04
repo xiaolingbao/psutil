@@ -96,6 +96,16 @@ typedef struct {
 } _SYSTEM_INTERRUPT_INFORMATION;
 
 
+typedef struct {
+    LARGE_INTEGER IdleTime;
+    LARGE_INTEGER KernelTime;
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER DpcTime;
+    LARGE_INTEGER InterruptTime;
+    ULONG InterruptCount;
+} _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION;
+
+
 typedef enum _KTHREAD_STATE {
     Initialized,
     Ready,
