@@ -260,8 +260,8 @@ pmmap_ext = namedtuple(
     'pmmap_ext', 'addr perms ' + ' '.join(pmmap_grouped._fields))
 
 ssysinfo = namedtuple(
-    'ssysinfo', ['procs_running', 'procs_blocked', 'ctx_switches',
-                 'open_files', 'interrupts', 'max_files', 'max_threads',
+    'ssysinfo', ['ctx_switches', 'interrupts', 'procs_running',
+                 'procs_blocked', 'open_files', 'max_files', 'max_threads',
                  'max_pid'])
 
 
@@ -472,8 +472,8 @@ def sysinfo():
     procfs = get_procfs_path()
     with open_binary('%s/sys/fs/file-nr' % procfs) as f:
         data = f.read()
-    files, _, max_files = data.split()
-    files = int(files)
+    open_files, _, max_files = data.split()
+    open_files = int(open_files)
     max_files = int(max_files)
     with open_binary('%s/sys/kernel/threads-max' % procfs) as f:
         max_threads = int(f.read())
@@ -496,8 +496,8 @@ def sysinfo():
             if ctx_switches is not None and procs_running is not None and \
                     procs_blocked is not None and interrupts is not None:
                 break
-    return ssysinfo(procs_running, procs_blocked, ctx_switches, files,
-                    interrupts, max_files, max_threads, max_pid)
+    return ssysinfo(ctx_switches, interrupts, procs_running, procs_blocked,
+                    open_files, max_files, max_threads, max_pid)
 
 
 # --- processes
