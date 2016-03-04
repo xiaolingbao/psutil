@@ -3119,8 +3119,11 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
     HINSTANCE hNtDll;
 
     NTSTATUS status;
-    _SYSTEM_PERFORMANCE_INFORMATION *sppi = NULL;
+    _SYSTEM_PERFORMANCE_INFORMATION *spi = NULL;
+    _SYSTEM_INTERRUPT_INFORMATION *InterruptInformation = NULL;
     SYSTEM_INFO si;
+    UINT i;
+    ULONG64 interrupts = 0;
 
     // obtain NtQuerySystemInformation
     hNtDll = LoadLibrary(TEXT("ntdll.dll"));
@@ -3140,18 +3143,18 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
 
     // allocates an array of _SYSTEM_PERFORMANCE_INFORMATION
     // structures, one per processor
-    sppi = (_SYSTEM_PERFORMANCE_INFORMATION *) \
+    spi = (_SYSTEM_PERFORMANCE_INFORMATION *) \
            malloc(si.dwNumberOfProcessors * \
                   sizeof(_SYSTEM_PERFORMANCE_INFORMATION));
-    if (sppi == NULL) {
+    if (spi == NULL) {
         PyErr_NoMemory();
         goto error;
     }
 
-    // gets cpu time informations
+    // get syscalls / ctx switches
     status = NtQuerySystemInformation(
         SystemPerformanceInformation,
-        sppi,
+        spi,
         si.dwNumberOfProcessors * sizeof(_SYSTEM_PERFORMANCE_INFORMATION),
         NULL);
     if (status != 0) {
@@ -3159,13 +3162,46 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         goto error;
     }
 
-    free(sppi);
+    // allocates an array of SYSTEM_INTERRUPT_INFORMATION
+    // structures, one per processor
+    InterruptInformation = \
+        malloc(sizeof(_SYSTEM_INTERRUPT_INFORMATION) *
+               si.dwNumberOfProcessors);
+    if (InterruptInformation == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+
+    // get interrupts
+    status = NtQuerySystemInformation(
+        SystemInterruptInformation,
+        InterruptInformation,
+        si.dwNumberOfProcessors * sizeof(SYSTEM_INTERRUPT_INFORMATION),
+        NULL);
+    if (status != 0) {
+        PyErr_SetFromWindowsErr(0);
+        goto error;
+    }
+    for (i = 0; i < si.dwNumberOfProcessors; i++) {
+        interrupts += InterruptInformation[i].DpcCount;
+    }
+
+    // done
+    free(spi);
+    free(InterruptInformation);
     FreeLibrary(hNtDll);
-    return Py_BuildValue("kk", sppi->ContextSwitches, sppi->SystemCalls);
+    return Py_BuildValue(
+        "kkk",
+        spi->ContextSwitches,
+        spi->SystemCalls,
+        (unsigned long)interrupts
+    );
 
 error:
-    if (sppi)
-        free(sppi);
+    if (spi)
+        free(spi);
+    if (InterruptInformation)
+        free(InterruptInformation);
     if (hNtDll)
         FreeLibrary(hNtDll);
     return NULL;

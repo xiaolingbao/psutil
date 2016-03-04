@@ -86,6 +86,16 @@ typedef struct {
 } _SYSTEM_PERFORMANCE_INFORMATION;
 
 
+typedef struct {
+    ULONG ContextSwitches;
+    ULONG DpcCount;
+    ULONG DpcRate;
+    ULONG TimeIncrement;
+    ULONG DpcBypassCount;
+    ULONG ApcBypassCount;
+} _SYSTEM_INTERRUPT_INFORMATION;
+
+
 typedef enum _KTHREAD_STATE {
     Initialized,
     Ready,
