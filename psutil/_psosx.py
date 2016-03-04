@@ -154,6 +154,10 @@ def users():
     return retlist
 
 
+def sysinfo():
+    return cext.sysinfo()
+
+
 def net_connections(kind='inet'):
     # Note: on OSX this will fail with AccessDenied unless
     # the process is owned by root.

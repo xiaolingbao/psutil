@@ -543,37 +543,37 @@ Other system info
 
   ctx_switches, interrupts, nthreads, traps, syscalls
 
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | Linux         |  OSX    | Windows      | SunOS        | FreeBSD    | OpenBSD     | NetBSD       |
-     +===============+=========+==============+==============+============+=============+==============+
-     | procs_running |         | ctx_switches | ctx_switches | max_files  | max_files   | max_files    |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | procs_blocked |         | interrupts   | interrupts   | max_procs  | max_procs   | max_procs    |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | ctx_switches  |         | dpcs         | num_threads  | max_pid    | max_threads | ctx_switches |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | open_files    |         | syscalls     | traps        | open_files | open_files  | interrupts   |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | interrupts    |         |              | syscalls     |            | num_threads |              |
-     +--------+------+---------+--------------+--------------+------------+-------------+--------------+
-     | max_threads   |         |              |              |            |             |              |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | max_files     |         |              |              |            |             |              |
-     +--------+------+---------+--------------+--------------+------------+-------------+--------------+
-     | max_pid       |         |              |              |            |             |              |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
-     | max_procs     |         |              |              |            |             |              |
-     +---------------+---------+--------------+--------------+------------+-------------+--------------+
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | Linux         |  OSX         | Windows      | SunOS        | FreeBSD    | OpenBSD     | NetBSD       |
+     +===============+==============+==============+==============+============+=============+==============+
+     | procs_running | ctx_switches | ctx_switches | ctx_switches | max_files  | max_files   | max_files    |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | procs_blocked | interrupts   | interrupts   | interrupts   | max_procs  | max_procs   | max_procs    |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | ctx_switches  | syscalls     | dpcs         | num_threads  | max_pid    | max_threads | ctx_switches |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | open_files    |              | syscalls     | traps        | open_files | open_files  | interrupts   |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | interrupts    |              |              | syscalls     |            | num_threads |              |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | max_threads   |              |              |              |            |             |              |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | max_files     |              |              |              |            |             |              |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | max_pid       |              |              |              |            |             |              |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
+     | max_procs     |              |              |              |            |             |              |
+     +---------------+--------------+--------------+--------------+------------+-------------+--------------+
 
   - **procs_running** (Linux): current number of actively running processes.
   - **procs_blocked** (Linux): current number of processes waiting for I/O.
-  - **ctx_switches** (Linux, Windows, NetBSD, SunOS):
+  - **ctx_switches** (Linux, Windows, NetBSD, SunOS, OSX):
     number of system-wide context switches (voluntary and involuntary) since
     boot (cumulative, always increasing)
   - **open_files** (Linux, FreeBSD):
     total number of opened file descriptors (regular files, sockets, etc.),
     system-wide.
-  - **interrupts** (Linux, Windows, NetBSD, SunOS):
+  - **interrupts** (Linux, OSX, Windows, NetBSD, SunOS):
     number of total system-wide interrupts since boot (cumulative, always
     increasing).
   - **max_threads** (Linux): maximum number of threads which can be run,
@@ -585,7 +585,7 @@ Other system info
     system-wide.
   - **num_threads** (OpenBSD): total number of running threads, system-wide.
   - **traps** (SunOS): number of kernel traps.
-  - **syscalls** (Windows, SunOS): number of syscalls.
+  - **syscalls** (Windows, OSX, SunOS): number of syscalls.
   - **pdcs** (Windows): number of deferred procedure calls.
 
   Example (Linux):

@@ -1789,6 +1789,33 @@ error:
 
 
 /*
+ * Return various system info.
+ */
+static PyObject *
+psutil_sysinfo(PyObject *self, PyObject *args) {
+    struct vmmeter vmstat;
+    kern_return_t ret;
+    mach_msg_type_number_t count = sizeof(vmstat) / sizeof(integer_t);
+    mach_port_t mport = mach_host_self();
+
+    ret = host_statistics(mport, HOST_VM_INFO, (host_info_t)&vmstat, &count);
+    if (ret != KERN_SUCCESS) {
+        PyErr_Format(PyExc_RuntimeError,
+                     "host_statistics() failed: %s", mach_error_string(ret));
+        return NULL;
+    }
+    mach_port_deallocate(mach_task_self(), mport);
+
+    return Py_BuildValue(
+        "III",
+        vmstat.v_swtch,  // ctx switches
+        vmstat.v_intr,  // interrupts
+        vmstat.v_syscall  // syscalls
+    );
+}
+
+
+/*
  * define the psutil C module methods and initialize the module.
  */
 static PyMethodDef
@@ -1867,6 +1894,8 @@ PsutilMethods[] = {
      "Return dict of tuples of disks I/O information."},
     {"users", psutil_users, METH_VARARGS,
      "Return currently connected users as a list of tuples"},
+    {"sysinfo", psutil_sysinfo, METH_VARARGS,
+     "Return various system info"},
 
     {NULL, NULL, 0, NULL}
 };
