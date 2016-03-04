@@ -3111,6 +3111,9 @@ error:
 }
 
 
+/*
+ * Return various system info
+ */
 static PyObject *
 psutil_sysinfo(PyObject *self, PyObject *args) {
     // NtQuerySystemInformation stuff
