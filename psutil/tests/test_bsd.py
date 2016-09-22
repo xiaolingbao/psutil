@@ -294,6 +294,26 @@ class FreeBSDSpecificTestCase(unittest.TestCase):
         self.assertAlmostEqual(
             psutil.sysinfo().files, sysctl("kern.openfiles"), delta=10)
 
+    def test_cpu_stats_ctx_switches(self):
+        self.assertAlmostEqual(psutil.cpu_stats().ctx_switches,
+                               sysctl('vm.stats.sys.v_swtch'), delta=1000)
+
+    def test_cpu_stats_interrupts(self):
+        self.assertAlmostEqual(psutil.cpu_stats().interrupts,
+                               sysctl('vm.stats.sys.v_intr'), delta=1000)
+
+    def test_cpu_stats_soft_interrupts(self):
+        self.assertAlmostEqual(psutil.cpu_stats().soft_interrupts,
+                               sysctl('vm.stats.sys.v_soft'), delta=1000)
+
+    def test_cpu_stats_syscalls(self):
+        self.assertAlmostEqual(psutil.cpu_stats().syscalls,
+                               sysctl('vm.stats.sys.v_syscall'), delta=1000)
+
+    # def test_cpu_stats_traps(self):
+    #    self.assertAlmostEqual(psutil.cpu_stats().traps,
+    #                           sysctl('vm.stats.sys.v_trap'), delta=1000)
+
 
 # =====================================================================
 # --- OpenBSD
@@ -372,6 +392,28 @@ class NetBSDSpecificTestCase(unittest.TestCase):
 
     def test_sysctl_max_procs(self):
         self.assertEqual(psutil.sysinfo().max_procs, sysctl('kern.maxproc'))
+
+    def test_cpu_stats_interrupts(self):
+        with open('/proc/stat', 'rb') as f:
+            for line in f:
+                if line.startswith(b'intr'):
+                    interrupts = int(line.split()[1])
+                    break
+            else:
+                raise ValueError("couldn't find line")
+        self.assertAlmostEqual(
+            psutil.cpu_stats().interrupts, interrupts, delta=1000)
+
+    def test_cpu_stats_ctx_switches(self):
+        with open('/proc/stat', 'rb') as f:
+            for line in f:
+                if line.startswith(b'ctxt'):
+                    ctx_switches = int(line.split()[1])
+                    break
+            else:
+                raise ValueError("couldn't find line")
+        self.assertAlmostEqual(
+            psutil.cpu_stats().ctx_switches, ctx_switches, delta=1000)
 
 
 if __name__ == '__main__':

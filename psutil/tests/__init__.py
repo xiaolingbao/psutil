@@ -13,6 +13,7 @@ import atexit
 import contextlib
 import errno
 import functools
+import ipaddress  # python >= 3.3 / requires "pip install ipaddress"
 import os
 import re
 import shutil
@@ -21,16 +22,14 @@ import stat
 import subprocess
 import sys
 import tempfile
+import textwrap
 import threading
 import time
 import warnings
 from socket import AF_INET
 from socket import SOCK_DGRAM
 from socket import SOCK_STREAM
-try:
-    import ipaddress  # python >= 3.3
-except ImportError:
-    ipaddress = None
+
 try:
     from unittest import mock  # py3
 except ImportError:
@@ -62,10 +61,35 @@ if PY3:
 else:
     import imp as importlib
 
+__all__ = [
+    # constants
+    'APPVEYOR', 'DEVNULL', 'GLOBAL_TIMEOUT', 'MEMORY_TOLERANCE', 'NO_RETRIES',
+    'PYPY', 'PYTHON', 'RLIMIT_SUPPORT', 'ROOT_DIR', 'SCRIPTS_DIR',
+    'TESTFILE_PREFIX', 'TESTFN', 'TESTFN_UNICODE', 'TOX', 'TRAVIS',
+    'VALID_PROC_STATUSES', 'VERBOSITY',
+    # classes
+    'ThreadTask'
+    # test utils
+    'check_connection_ntuple', 'check_net_address', 'unittest', 'cleanup',
+    'skip_on_access_denied', 'skip_on_not_implemented', 'retry_before_failing',
+    'run_test_module_by_name',
+    # fs utils
+    'chdir', 'safe_remove', 'safe_rmdir', 'create_temp_executable_file',
+    # subprocesses
+    'pyrun', 'reap_children', 'get_test_subprocess',
+    # os
+    'get_winver', 'get_kernel_version',
+    # sync primitives
+    'call_until', 'wait_for_pid', 'wait_for_file',
+    # others
+    'warn', 'decode_path', 'encode_path',
+]
+
 
 # ===================================================================
-# --- Constants
+# --- constants
 # ===================================================================
+
 
 # conf for retry_before_failing() decorator
 NO_RETRIES = 10
@@ -90,7 +114,7 @@ if not PY3:
         TESTFN_UNICODE = TESTFN + "???"
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),
-                           '..', '..'))
+                                        '..', '..'))
 SCRIPTS_DIR = os.path.join(ROOT_DIR, 'scripts')
 
 WIN_VISTA = (6, 0, 0) if WINDOWS else None
@@ -102,16 +126,20 @@ TRAVIS = bool(os.environ.get('TRAVIS'))
 # (http://www.appveyor.com/)
 APPVEYOR = bool(os.environ.get('APPVEYOR'))
 
-if TRAVIS or 'tox' in sys.argv[0]:
-    import ipaddress
 if TRAVIS or APPVEYOR:
     GLOBAL_TIMEOUT = GLOBAL_TIMEOUT * 4
 VERBOSITY = 1 if os.getenv('SILENT') or TOX else 2
 
+# assertRaisesRegexp renamed to assertRaisesRegex in 3.3; add support
+# for the new name
+if not hasattr(unittest.TestCase, 'assertRaisesRegex'):
+    unittest.TestCase.assertRaisesRegex = unittest.TestCase.assertRaisesRegexp
+
 
 # ===================================================================
-# --- Classes
+# --- classes
 # ===================================================================
+
 
 class ThreadTask(threading.Thread):
     """A thread object used for running process thread tests."""
@@ -151,21 +179,8 @@ class ThreadTask(threading.Thread):
 
 
 # ===================================================================
-# --- Utility functions
+# --- subprocesses
 # ===================================================================
-
-def cleanup():
-    reap_children(search_all=True)
-    safe_remove(TESTFN)
-    try:
-        safe_rmdir(TESTFN_UNICODE)
-    except UnicodeEncodeError:
-        pass
-    for path in _testfiles:
-        safe_remove(path)
-
-atexit.register(cleanup)
-atexit.register(lambda: DEVNULL.close())
 
 
 _subprocesses_started = set()
@@ -204,7 +219,7 @@ def get_test_subprocess(cmd=None, wait=False, **kwds):
                 warn("couldn't make sure test file was actually created")
         else:
             wait_for_pid(sproc.pid)
-    _subprocesses_started.add(psutil.Process(sproc.pid))
+    _subprocesses_started.add(sproc)
     return sproc
 
 
@@ -228,11 +243,6 @@ def pyrun(src):
         return subp
 
 
-def warn(msg):
-    """Raise a warning msg."""
-    warnings.warn(msg, UserWarning)
-
-
 def sh(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
     """run cmd in a subprocess and return its output.
     raises RuntimeError on error.
@@ -252,7 +262,60 @@ def sh(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
     return stdout.strip()
 
 
-if POSIX:
+def reap_children(recursive=False):
+    """Kill any subprocess started by this test suite and ensure that
+    no zombies stick around to hog resources and create problems when
+    looking for refleaks.
+    """
+    # Get the children here, before terminating the sub processes
+    # as we don't want to lose the intermediate reference in case
+    # of grand children.
+    if recursive:
+        children = psutil.Process().children(recursive=True)
+    else:
+        children = []
+
+    subprocs = _subprocesses_started.copy()
+    _subprocesses_started.clear()
+    for subp in subprocs:
+        try:
+            subp.terminate()
+        except OSError as err:
+            if err.errno != errno.ESRCH:
+                raise
+        try:
+            subp.wait()
+        except OSError as err:
+            if err.errno != errno.ECHILD:
+                raise
+
+    if children:
+        for p in children:
+            try:
+                p.terminate()
+            except psutil.NoSuchProcess:
+                pass
+        gone, alive = psutil.wait_procs(children, timeout=GLOBAL_TIMEOUT)
+        for p in alive:
+            warn("couldn't terminate process %s" % p)
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass
+            _, alive = psutil.wait_procs(alive, timeout=GLOBAL_TIMEOUT)
+            if alive:
+                warn("couldn't not kill processes %s" % str(alive))
+
+
+# ===================================================================
+# --- OS
+# ===================================================================
+
+
+if not POSIX:
+    def get_kernel_version():
+        return ()
+else:
     def get_kernel_version():
         """Return a tuple such as (2, 6, 36)."""
         s = ""
@@ -273,15 +336,34 @@ if POSIX:
         if len(nums) >= 3:
             micro = int(nums[2])
         return (major, minor, micro)
-else:
-    def get_kernel_version():
-        return ()
 
 
 if LINUX:
     RLIMIT_SUPPORT = get_kernel_version() >= (2, 6, 36)
 else:
     RLIMIT_SUPPORT = False
+
+
+if not WINDOWS:
+    def get_winver():
+        raise NotImplementedError("not a Windows OS")
+else:
+    def get_winver():
+        wv = sys.getwindowsversion()
+        if hasattr(wv, 'service_pack_major'):  # python >= 2.7
+            sp = wv.service_pack_major or 0
+        else:
+            r = re.search("\s\d$", wv[4])
+            if r:
+                sp = int(r.group(0))
+            else:
+                sp = 0
+        return (wv[0], wv[1], sp)
+
+
+# ===================================================================
+# --- sync primitives
+# ===================================================================
 
 
 def wait_for_pid(pid, timeout=GLOBAL_TIMEOUT):
@@ -301,7 +383,7 @@ def wait_for_pid(pid, timeout=GLOBAL_TIMEOUT):
 
 def wait_for_file(fname, timeout=GLOBAL_TIMEOUT, delete_file=True):
     """Wait for a file to be written on disk."""
-    stop_at = time.time() + 3
+    stop_at = time.time() + timeout
     while time.time() < stop_at:
         try:
             with open(fname, "r") as f:
@@ -313,36 +395,132 @@ def wait_for_file(fname, timeout=GLOBAL_TIMEOUT, delete_file=True):
             return data
         except IOError:
             time.sleep(0.001)
-    raise RuntimeError("timed out (couldn't read file)")
+    raise RuntimeError(
+        "timed out after %s secs (couldn't read file)" % timeout)
 
 
-def reap_children(search_all=False):
-    """Kill any subprocess started by this test suite and ensure that
-    no zombies stick around to hog resources and create problems when
-    looking for refleaks.
+def call_until(fun, expr, timeout=GLOBAL_TIMEOUT):
+    """Keep calling function for timeout secs and exit if eval()
+    expression is True.
     """
-    global _subprocesses_started
-    procs = _subprocesses_started.copy()
-    if search_all:
-        this_process = psutil.Process()
-        for p in this_process.children(recursive=True):
-            procs.add(p)
-    for p in procs:
-        try:
-            p.terminate()
-        except psutil.NoSuchProcess:
-            pass
-    gone, alive = psutil.wait_procs(procs, timeout=GLOBAL_TIMEOUT)
-    for p in alive:
-        warn("couldn't terminate process %s" % p)
-        try:
-            p.kill()
-        except psutil.NoSuchProcess:
-            pass
-    _, alive = psutil.wait_procs(alive, timeout=GLOBAL_TIMEOUT)
-    if alive:
-        warn("couldn't not kill processes %s" % str(alive))
-    _subprocesses_started = set(alive)
+    stop_at = time.time() + timeout
+    while time.time() < stop_at:
+        ret = fun()
+        if eval(expr):
+            return ret
+        time.sleep(0.001)
+    raise RuntimeError('timed out after %s secs (ret=%r)' % (timeout, ret))
+
+
+# ===================================================================
+# --- fs
+# ===================================================================
+
+
+def safe_remove(file):
+    "Convenience function for removing temporary test files"
+    try:
+        os.remove(file)
+    except OSError as err:
+        if err.errno != errno.ENOENT:
+            # # file is being used by another process
+            # if WINDOWS and isinstance(err, WindowsError) and err.errno == 13:
+            #     return
+            raise
+
+
+def safe_rmdir(dir):
+    "Convenience function for removing temporary test directories"
+    try:
+        os.rmdir(dir)
+    except OSError as err:
+        if err.errno != errno.ENOENT:
+            raise
+
+
+@contextlib.contextmanager
+def chdir(dirname):
+    """Context manager which temporarily changes the current directory."""
+    curdir = os.getcwd()
+    try:
+        os.chdir(dirname)
+        yield
+    finally:
+        os.chdir(curdir)
+
+
+# ===================================================================
+# --- testing
+# ===================================================================
+
+
+def retry_before_failing(ntimes=None):
+    """Decorator which runs a test function and retries N times before
+    actually failing.
+    """
+    def decorator(fun):
+        @functools.wraps(fun)
+        def wrapper(*args, **kwargs):
+            times = ntimes or NO_RETRIES
+            assert times, times
+            for x in range(times):
+                try:
+                    return fun(*args, **kwargs)
+                except AssertionError as _:
+                    err = _
+            if PY3:
+                raise err
+            else:
+                raise
+        return wrapper
+    return decorator
+
+
+def run_test_module_by_name(name):
+    # testmodules = [os.path.splitext(x)[0] for x in os.listdir(HERE)
+    #                if x.endswith('.py') and x.startswith('test_')]
+    name = os.path.splitext(os.path.basename(name))[0]
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromName(name))
+    result = unittest.TextTestRunner(verbosity=VERBOSITY).run(suite)
+    success = result.wasSuccessful()
+    sys.exit(0 if success else 1)
+
+
+def skip_on_access_denied(only_if=None):
+    """Decorator to Ignore AccessDenied exceptions."""
+    def decorator(fun):
+        @functools.wraps(fun)
+        def wrapper(*args, **kwargs):
+            try:
+                return fun(*args, **kwargs)
+            except psutil.AccessDenied:
+                if only_if is not None:
+                    if not only_if:
+                        raise
+                msg = "%r was skipped because it raised AccessDenied" \
+                      % fun.__name__
+                raise unittest.SkipTest(msg)
+        return wrapper
+    return decorator
+
+
+def skip_on_not_implemented(only_if=None):
+    """Decorator to Ignore NotImplementedError exceptions."""
+    def decorator(fun):
+        @functools.wraps(fun)
+        def wrapper(*args, **kwargs):
+            try:
+                return fun(*args, **kwargs)
+            except NotImplementedError:
+                if only_if is not None:
+                    if not only_if:
+                        raise
+                msg = "%r was skipped because it raised NotImplementedError" \
+                      % fun.__name__
+                raise unittest.SkipTest(msg)
+        return wrapper
+    return decorator
 
 
 def check_net_address(addr, family):
@@ -356,16 +534,14 @@ def check_net_address(addr, family):
         assert len(octs) == 4, addr
         for num in octs:
             assert 0 <= num <= 255, addr
-        if ipaddress:
-            if not PY3:
-                addr = unicode(addr)
-            ipaddress.IPv4Address(addr)
+        if not PY3:
+            addr = unicode(addr)
+        ipaddress.IPv4Address(addr)
     elif family == AF_INET6:
         assert isinstance(addr, str), addr
-        if ipaddress:
-            if not PY3:
-                addr = unicode(addr)
-            ipaddress.IPv6Address(addr)
+        if not PY3:
+            addr = unicode(addr)
+        ipaddress.IPv6Address(addr)
     elif family == psutil.AF_LINK:
         assert re.match('([a-fA-F0-9]{2}[:|\-]?){6}', addr) is not None, addr
     else:
@@ -432,107 +608,7 @@ def check_connection_ntuple(conn):
                     assert dupsock.type == conn.type
 
 
-def safe_remove(file):
-    "Convenience function for removing temporary test files"
-    try:
-        os.remove(file)
-    except OSError as err:
-        if err.errno != errno.ENOENT:
-            # # file is being used by another process
-            # if WINDOWS and isinstance(err, WindowsError) and err.errno == 13:
-            #     return
-            raise
-
-
-def safe_rmdir(dir):
-    "Convenience function for removing temporary test directories"
-    try:
-        os.rmdir(dir)
-    except OSError as err:
-        if err.errno != errno.ENOENT:
-            raise
-
-
-@contextlib.contextmanager
-def chdir(dirname):
-    """Context manager which temporarily changes the current directory."""
-    curdir = os.getcwd()
-    try:
-        os.chdir(dirname)
-        yield
-    finally:
-        os.chdir(curdir)
-
-
-def call_until(fun, expr, timeout=GLOBAL_TIMEOUT):
-    """Keep calling function for timeout secs and exit if eval()
-    expression is True.
-    """
-    stop_at = time.time() + timeout
-    while time.time() < stop_at:
-        ret = fun()
-        if eval(expr):
-            return ret
-        time.sleep(0.001)
-    raise RuntimeError('timed out (ret=%r)' % ret)
-
-
-def retry_before_failing(ntimes=None):
-    """Decorator which runs a test function and retries N times before
-    actually failing.
-    """
-    def decorator(fun):
-        @functools.wraps(fun)
-        def wrapper(*args, **kwargs):
-            times = ntimes or NO_RETRIES
-            assert times, times
-            for x in range(times):
-                try:
-                    return fun(*args, **kwargs)
-                except AssertionError as _:
-                    err = _
-            raise err
-        return wrapper
-    return decorator
-
-
-def skip_on_access_denied(only_if=None):
-    """Decorator to Ignore AccessDenied exceptions."""
-    def decorator(fun):
-        @functools.wraps(fun)
-        def wrapper(*args, **kwargs):
-            try:
-                return fun(*args, **kwargs)
-            except psutil.AccessDenied:
-                if only_if is not None:
-                    if not only_if:
-                        raise
-                msg = "%r was skipped because it raised AccessDenied" \
-                      % fun.__name__
-                raise unittest.SkipTest(msg)
-        return wrapper
-    return decorator
-
-
-def skip_on_not_implemented(only_if=None):
-    """Decorator to Ignore NotImplementedError exceptions."""
-    def decorator(fun):
-        @functools.wraps(fun)
-        def wrapper(*args, **kwargs):
-            try:
-                return fun(*args, **kwargs)
-            except NotImplementedError:
-                if only_if is not None:
-                    if not only_if:
-                        raise
-                msg = "%r was skipped because it raised NotImplementedError" \
-                      % fun.__name__
-                raise unittest.SkipTest(msg)
-        return wrapper
-    return decorator
-
-
-def create_temp_executable_file(suffix, code="void main() { pause(); }"):
+def create_temp_executable_file(suffix, c_code=None):
     tmpdir = None
     if TRAVIS and OSX:
         tmpdir = "/private/tmp"
@@ -541,11 +617,19 @@ def create_temp_executable_file(suffix, code="void main() { pause(); }"):
     os.close(fd)
 
     if which("gcc"):
+        if c_code is None:
+            c_code = textwrap.dedent(
+                """
+                #include <unistd.h>
+                void main() {
+                    pause();
+                }
+                """)
         fd, c_file = tempfile.mkstemp(
             prefix='psu', suffix='.c', dir=tmpdir)
         os.close(fd)
         with open(c_file, "w") as f:
-            f.write(code)
+            f.write(c_code)
         subprocess.check_call(["gcc", c_file, "-o", path])
         safe_remove(c_file)
     else:
@@ -557,21 +641,28 @@ def create_temp_executable_file(suffix, code="void main() { pause(); }"):
     return path
 
 
-if WINDOWS:
-    def get_winver():
-        wv = sys.getwindowsversion()
-        if hasattr(wv, 'service_pack_major'):  # python >= 2.7
-            sp = wv.service_pack_major or 0
-        else:
-            r = re.search("\s\d$", wv[4])
-            if r:
-                sp = int(r.group(0))
-            else:
-                sp = 0
-        return (wv[0], wv[1], sp)
-else:
-    def get_winver():
-        raise NotImplementedError("not a Windows OS")
+def cleanup():
+    reap_children(recursive=True)
+    safe_remove(TESTFN)
+    try:
+        safe_rmdir(TESTFN_UNICODE)
+    except UnicodeEncodeError:
+        pass
+    for path in _testfiles:
+        safe_remove(path)
+
+atexit.register(cleanup)
+atexit.register(lambda: DEVNULL.close())
+
+
+# ===================================================================
+# --- others
+# ===================================================================
+
+
+def warn(msg):
+    """Raise a warning msg."""
+    warnings.warn(msg, UserWarning)
 
 
 # In Python 3 paths are unicode objects by default.  Surrogate escapes
@@ -590,14 +681,3 @@ def decode_path(path):
                            errors="surrogateescape")
     else:
         return path
-
-
-def run_test_module_by_name(name):
-    # testmodules = [os.path.splitext(x)[0] for x in os.listdir(HERE)
-    #                if x.endswith('.py') and x.startswith('test_')]
-    name = os.path.splitext(os.path.basename(name))[0]
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.defaultTestLoader.loadTestsFromName(name))
-    result = unittest.TextTestRunner(verbosity=VERBOSITY).run(suite)
-    success = result.wasSuccessful()
-    sys.exit(0 if success else 1)

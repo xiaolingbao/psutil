@@ -14,9 +14,9 @@ $ python scripts/top.py
  CPU1  [|||                                     ]   7.8%
  CPU2  [                                        ]   2.0%
  CPU3  [|||||                                   ]  13.9%
- Mem   [|||||||||||||||||||                     ]  49.8%  4920M/9888M
- Swap  [                                        ]   0.0%     0M/0M
- Processes: 287 (running=1 sleeping=286)
+ Mem   [|||||||||||||||||||                     ]  49.8%  4920M / 9888M
+ Swap  [                                        ]   0.0%     0M / 0M
+ Processes: 287 (running=1, sleeping=286, zombie=1)
  Load average: 0.34 0.54 0.46  Uptime: 3 days, 10:16:37
 
 PID    USER       NI  VIRT   RES   CPU% MEM%     TIME+  NAME
@@ -34,9 +34,8 @@ PID    USER       NI  VIRT   RES   CPU% MEM%     TIME+  NAME
 ...
 """
 
-from datetime import datetime
-from datetime import timedelta
 import atexit
+import datetime
 import os
 import sys
 import time
@@ -49,11 +48,13 @@ import psutil
 
 
 # --- curses stuff
+
 def tear_down():
     win.keypad(0)
     curses.nocbreak()
     curses.echo()
     curses.endwin()
+
 
 win = curses.initscr()
 atexit.register(tear_down)
@@ -76,6 +77,7 @@ def print_line(line, highlight=False):
         raise
     else:
         lineno += 1
+
 # --- /curses stuff
 
 
@@ -138,11 +140,10 @@ def print_header(procs_status, num_procs):
                                               perc))
     mem = psutil.virtual_memory()
     dashes, empty_dashes = get_dashes(mem.percent)
-    used = mem.total - mem.available
-    line = " Mem   [%s%s] %5s%% %6s/%s" % (
+    line = " Mem   [%s%s] %5s%% %6s / %s" % (
         dashes, empty_dashes,
         mem.percent,
-        str(int(used / 1024 / 1024)) + "M",
+        str(int(mem.used / 1024 / 1024)) + "M",
         str(int(mem.total / 1024 / 1024)) + "M"
     )
     print_line(line)
@@ -150,7 +151,7 @@ def print_header(procs_status, num_procs):
     # swap usage
     swap = psutil.swap_memory()
     dashes, empty_dashes = get_dashes(swap.percent)
-    line = " Swap  [%s%s] %5s%% %6s/%s" % (
+    line = " Swap  [%s%s] %5s%% %6s / %s" % (
         dashes, empty_dashes,
         swap.percent,
         str(int(swap.used / 1024 / 1024)) + "M",
@@ -164,9 +165,10 @@ def print_header(procs_status, num_procs):
         if y:
             st.append("%s=%s" % (x, y))
     st.sort(key=lambda x: x[:3] in ('run', 'sle'), reverse=1)
-    print_line(" Processes: %s (%s)" % (num_procs, ' '.join(st)))
+    print_line(" Processes: %s (%s)" % (num_procs, ', '.join(st)))
     # load average, uptime
-    uptime = datetime.now() - datetime.fromtimestamp(psutil.boot_time())
+    uptime = datetime.datetime.now() - \
+        datetime.datetime.fromtimestamp(psutil.boot_time())
     av1, av2, av3 = os.getloadavg()
     line = " Load average: %.2f %.2f %.2f  Uptime: %s" \
         % (av1, av2, av3, str(uptime).split('.')[0])
@@ -187,7 +189,7 @@ def refresh_window(procs, procs_status):
         # TIME+ column shows process CPU cumulative time and it
         # is expressed as: "mm:ss.ms"
         if p.dict['cpu_times'] is not None:
-            ctime = timedelta(seconds=sum(p.dict['cpu_times']))
+            ctime = datetime.timedelta(seconds=sum(p.dict['cpu_times']))
             ctime = "%s:%s.%s" % (ctime.seconds // 60 % 60,
                                   str((ctime.seconds % 60)).zfill(2),
                                   str(ctime.microseconds)[:2])
@@ -229,6 +231,7 @@ def main():
             interval = 1
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 if __name__ == '__main__':
     main()

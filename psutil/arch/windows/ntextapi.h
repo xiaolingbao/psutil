@@ -7,6 +7,17 @@
 #define __NTEXTAPI_H__
 #include <winternl.h>
 
+
+typedef struct {
+    LARGE_INTEGER IdleTime;
+    LARGE_INTEGER KernelTime;
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER DpcTime;
+    LARGE_INTEGER InterruptTime;
+    ULONG InterruptCount;
+} _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION;
+
+
 typedef struct {
     LARGE_INTEGER IdleProcessTime;
     LARGE_INTEGER IoReadTransferCount;
@@ -96,16 +107,6 @@ typedef struct {
 } _SYSTEM_INTERRUPT_INFORMATION;
 
 
-typedef struct {
-    LARGE_INTEGER IdleTime;
-    LARGE_INTEGER KernelTime;
-    LARGE_INTEGER UserTime;
-    LARGE_INTEGER DpcTime;
-    LARGE_INTEGER InterruptTime;
-    ULONG InterruptCount;
-} _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION;
-
-
 typedef enum _KTHREAD_STATE {
     Initialized,
     Ready,
@@ -118,6 +119,7 @@ typedef enum _KTHREAD_STATE {
     GateWait,
     MaximumThreadState
 } KTHREAD_STATE, *PKTHREAD_STATE;
+
 
 typedef enum _KWAIT_REASON {
     Executive = 0,
@@ -160,10 +162,12 @@ typedef enum _KWAIT_REASON {
     MaximumWaitReason = 37
 } KWAIT_REASON, *PKWAIT_REASON;
 
+
 typedef struct _CLIENT_ID {
     HANDLE UniqueProcess;
     HANDLE UniqueThread;
 } CLIENT_ID, *PCLIENT_ID;
+
 
 typedef struct _SYSTEM_THREAD_INFORMATION {
     LARGE_INTEGER KernelTime;
@@ -179,7 +183,9 @@ typedef struct _SYSTEM_THREAD_INFORMATION {
     KWAIT_REASON WaitReason;
 } SYSTEM_THREAD_INFORMATION, *PSYSTEM_THREAD_INFORMATION;
 
+
 typedef struct _TEB *PTEB;
+
 
 // private
 typedef struct _SYSTEM_EXTENDED_THREAD_INFORMATION {
@@ -192,6 +198,7 @@ typedef struct _SYSTEM_EXTENDED_THREAD_INFORMATION {
     ULONG_PTR Reserved3;
     ULONG_PTR Reserved4;
 } SYSTEM_EXTENDED_THREAD_INFORMATION, *PSYSTEM_EXTENDED_THREAD_INFORMATION;
+
 
 typedef struct _SYSTEM_PROCESS_INFORMATION2 {
     ULONG NextEntryOffset;
@@ -250,6 +257,7 @@ typedef struct _WINSTATION_INFO {
     FILETIME CurrentTime;
 } WINSTATION_INFO, *PWINSTATION_INFO;
 
+
 typedef BOOLEAN (WINAPI * PWINSTATIONQUERYINFORMATIONW)
                  (HANDLE,ULONG,WINSTATIONINFOCLASS,PVOID,ULONG,PULONG);
 
@@ -261,6 +269,7 @@ typedef BOOLEAN (WINAPI * PWINSTATIONQUERYINFORMATIONW)
  */
 typedef LONG NTSTATUS;
 
+
 typedef NTSTATUS (NTAPI *_NtQueryInformationProcess)(
     HANDLE ProcessHandle,
     DWORD ProcessInformationClass,
@@ -269,12 +278,14 @@ typedef NTSTATUS (NTAPI *_NtQueryInformationProcess)(
     PDWORD ReturnLength
 );
 
+
 typedef NTSTATUS (NTAPI *_NtSetInformationProcess)(
     HANDLE ProcessHandle,
     DWORD ProcessInformationClass,
     PVOID ProcessInformation,
     DWORD ProcessInformationLength
 );
+
 
 typedef enum _PROCESSINFOCLASS2 {
     _ProcessBasicInformation,
@@ -323,6 +334,7 @@ typedef enum _PROCESSINFOCLASS2 {
     MaxProcessInfoClass
 } PROCESSINFOCLASS2;
 
+
 #define PROCESSINFOCLASS PROCESSINFOCLASS2
 #define ProcessBasicInformation _ProcessBasicInformation
 #define ProcessWow64Information _ProcessWow64Information
@@ -330,4 +342,3 @@ typedef enum _PROCESSINFOCLASS2 {
 #define ProcessImageFileName _ProcessImageFileName
 
 #endif // __NTEXTAPI_H__
-

@@ -971,7 +971,7 @@ psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args) {
 #else
         long value = PyInt_AsLong(item);
 #endif
-        if (value == -1 && PyErr_Occurred())
+        if (value == -1 || PyErr_Occurred())
             goto error;
         CPU_SET(value, &cpu_set);
     }
@@ -1012,6 +1012,37 @@ psutil_sysinfo(PyObject *self, PyObject *args) {
         goto error;
 
     return Py_BuildValue("iiii", maxfiles, maxprocs, maxpid, openfiles);
+}
+
+
+PyObject *
+psutil_cpu_stats(PyObject *self, PyObject *args) {
+    unsigned int v_soft;
+    unsigned int v_intr;
+    unsigned int v_syscall;
+    unsigned int v_trap;
+    unsigned int v_swtch;
+    size_t size = sizeof(v_soft);
+
+    if (sysctlbyname("vm.stats.sys.v_soft", &v_soft, &size, NULL, 0))
+        goto error;
+    if (sysctlbyname("vm.stats.sys.v_intr", &v_intr, &size, NULL, 0))
+        goto error;
+    if (sysctlbyname("vm.stats.sys.v_syscall", &v_syscall, &size, NULL, 0))
+        goto error;
+    if (sysctlbyname("vm.stats.sys.v_trap", &v_trap, &size, NULL, 0))
+        goto error;
+    if (sysctlbyname("vm.stats.sys.v_swtch", &v_swtch, &size, NULL, 0))
+        goto error;
+
+    return Py_BuildValue(
+        "IIIII",
+        v_swtch,  // ctx switches
+        v_intr,  // interrupts
+        v_soft,  // software interrupts
+        v_syscall,  // syscalls
+        v_trap  // traps
+    );
 
 error:
     PyErr_SetFromErrno(PyExc_OSError);

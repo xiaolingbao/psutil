@@ -166,6 +166,12 @@ class TestMisc(unittest.TestCase):
         self.assertEqual('.'.join([str(x) for x in psutil.version_info]),
                          psutil.__version__)
 
+    def test_process_as_dict_no_new_names(self):
+        # See https://github.com/giampaolo/psutil/issues/813
+        p = psutil.Process()
+        p.foo = '1'
+        self.assertNotIn('foo', p.as_dict())
+
     def test_memoize(self):
         from psutil._common import memoize
 
@@ -431,6 +437,10 @@ class TestScripts(unittest.TestCase):
     def test_pidof(self):
         output = self.assert_stdout('pidof.py %s' % psutil.Process().name())
         self.assertIn(str(os.getpid()), output)
+
+    @unittest.skipUnless(WINDOWS, "Windows only")
+    def test_winservices(self):
+        self.assert_stdout('winservices.py')
 
 
 if __name__ == '__main__':

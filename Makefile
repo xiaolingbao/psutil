@@ -1,13 +1,44 @@
 # Shortcuts for various tasks (UNIX only).
-# To use a specific Python version run:
-# $ make install PYTHON=python3.3
+# To use a specific Python version run: "make install PYTHON=python3.3"
+# You can set the variables below from the command line.
 
-# You can set these variables from the command line.
-PYTHON    = python
-TSCRIPT   = psutil/tests/runner.py
+# Prefer Python 3 if installed.
+PYTHON != python -c \
+	"from subprocess import call, PIPE; \
+	code = call(['python3 -V'], shell=True, stdout=PIPE, stderr=PIPE); \
+	print('python3' if code == 0 else 'python')"
+
+TSCRIPT = psutil/tests/runner.py
+
+# List of nice-to-have dev libs.
+DEPS = argparse \
+	coverage \
+	flake8 \
+	futures \
+	ipdb \
+	mock==1.0.1 \
+	nose \
+	pep8 \
+	pyflakes \
+	requests \
+	setuptools \
+	sphinx \
+	sphinx-pypi-upload \
+	twine \
+	unittest2
+
+# In not in a virtualenv, add --user options for install commands.
+INSTALL_OPTS != $(PYTHON) -c \
+	"import sys; print('' if hasattr(sys, 'real_prefix') else '--user')"
+
 
 all: test
 
+# ===================================================================
+# Install
+# ===================================================================
+
+# Remove all build files.
 clean:
 	rm -f `find . -type f -name \*.py[co]`
 	rm -f `find . -type f -name \*.so`
@@ -21,68 +52,94 @@ clean:
 	rm -rf *\$testfile*
 	rm -rf .coverage
 	rm -rf .tox
-	rm -rf build
-	rm -rf dist
-	rm -rf docs/_build
-	rm -rf htmlcov
+	rm -rf build/
+	rm -rf dist/
+	rm -rf docs/_build/
+	rm -rf htmlcov/
+	rm -rf tmp/
 
+# Compile without installing.
 build: clean
 	$(PYTHON) setup.py build
-	@# copies *.so files in ./psutil directory in order to allow
+	@# copies compiled *.so files in ./psutil directory in order to allow
 	@# "import psutil" when using the interactive interpreter from within
 	@# this directory.
 	$(PYTHON) setup.py build_ext -i
+	rm -rf tmp
 
-# useful deps which are nice to have while developing / testing
-setup-dev-env: install-git-hooks
-	python -c  "import urllib2, ssl; \
-				context = ssl._create_unverified_context() if hasattr(ssl, '_create_unverified_context') else None; \
-				kw = dict(context=context) if context else {}; \
-				r = urllib2.urlopen('https://bootstrap.pypa.io/get-pip.py', **kw); \
-				open('/tmp/get-pip.py', 'w').write(r.read());"
-	$(PYTHON) /tmp/get-pip.py --user
-	rm /tmp/get-pip.py
-	$(PYTHON) -m pip install --user --upgrade pip
-	$(PYTHON) -m pip install --user --upgrade \
-		coverage  \
-		flake8 \
-		ipaddress \
-		ipdb \
-		mock==1.0.1 \
-		nose \
-		pep8 \
-		pyflakes \
-		sphinx \
-		sphinx-pypi-upload \
-		unittest2 \
-
+# Install this package + GIT hooks. Install is done:
+# - as the current user, in order to avoid permission issues
+# - in development / edit mode, so that source can be modified on the fly
 install: build
-	$(PYTHON) setup.py develop --user
+	$(PYTHON) setup.py develop $(INSTALL_OPTS)
+	rm -rf tmp
 
+# Uninstall this package via pip.
 uninstall:
 	cd ..; $(PYTHON) -m pip uninstall -y -v psutil
 
+# Install PIP (only if necessary).
+install-pip:
+	$(PYTHON) -c \
+		"import sys, ssl, os, pkgutil, tempfile, atexit; \
+		sys.exit(0) if pkgutil.find_loader('pip') else None; \
+		pyexc = 'from urllib.request import urlopen' if sys.version_info[0] == 3 else 'from urllib2 import urlopen'; \
+		exec(pyexc); \
+		ctx = ssl._create_unverified_context() if hasattr(ssl, '_create_unverified_context') else None; \
+		kw = dict(context=ctx) if ctx else {}; \
+		req = urlopen('https://bootstrap.pypa.io/get-pip.py', **kw); \
+		data = req.read(); \
+		f = tempfile.NamedTemporaryFile(suffix='.py'); \
+		atexit.register(f.close); \
+		f.write(data); \
+		f.flush(); \
+		print('downloaded %s' % f.name); \
+		code = os.system('%s %s --user' % (sys.executable, f.name)); \
+		f.close(); \
+		sys.exit(code);"
+
+# Install:
+# - GIT hooks
+# - pip (if necessary)
+# - useful deps which are nice to have while developing / testing;
+#   deps these are also upgraded
+setup-dev-env: install-git-hooks install-pip
+	$(PYTHON) -m pip install $(INSTALL_OPTS) --upgrade pip
+	$(PYTHON) -m pip install $(INSTALL_OPTS) --upgrade $(DEPS)
+
+# ===================================================================
+# Tests
+# ===================================================================
+
+# Run all tests.
 test: install
 	$(PYTHON) $(TSCRIPT)
 
+# Test psutil process-related APIs.
 test-process: install
 	$(PYTHON) -m unittest -v psutil.tests.test_process
 
+# Test psutil system-related APIs.
 test-system: install
 	$(PYTHON) -m unittest -v psutil.tests.test_system
 
+# Test misc.
+test-misc: install
+	$(PYTHON) psutil/tests/test_misc.py
+
+# Test memory leaks.
 test-memleaks: install
 	$(PYTHON) psutil/tests/test_memory_leaks.py
+
+# Run specific platform tests only.
+test-platform: install
+	$(PYTHON) psutil/tests/test_`$(PYTHON) -c 'import psutil; print([x.lower() for x in ("LINUX", "BSD", "OSX", "SUNOS", "WINDOWS") if getattr(psutil, x)][0])'`.py
 
 # Run a specific test by name; e.g. "make test-by-name disk_" will run
 # all test methods containing "disk_" in their name.
 # Requires "pip install nose".
 test-by-name: install
 	@$(PYTHON) -m nose psutil/tests/*.py --nocapture -v -m $(filter-out $@,$(MAKECMDGOALS))
-
-# Run specific platform tests only.
-test-platform: install
-	$(PYTHON) psutil/tests/test_`$(PYTHON) -c 'import psutil; print([x.lower() for x in ("LINUX", "BSD", "OSX", "SUNOS", "WINDOWS") if getattr(psutil, x)][0])'`.py
 
 # Same as above but for test_memory_leaks.py script.
 test-memleaks-by-name: install
@@ -97,6 +154,10 @@ coverage: install
 	$(PYTHON) -m coverage html
 	$(PYTHON) -m webbrowser -t htmlcov/index.html
 
+# ===================================================================
+# Linters
+# ===================================================================
+
 pep8:
 	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m pep8
 
@@ -107,6 +168,24 @@ pyflakes:
 flake8:
 	@git ls-files | grep \\.py$ | xargs $(PYTHON) -m flake8
 
+# ===================================================================
+# GIT
+# ===================================================================
+
+# git-tag a new release
+git-tag-release:
+	git tag -a release-`python -c "import setup; print(setup.get_version())"` -m `git rev-list HEAD --count`:`git rev-parse --short HEAD`
+	git push --follow-tags
+
+# Install GIT pre-commit hook.
+install-git-hooks:
+	ln -sf ../../.git-pre-commit .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+
+# ===================================================================
+# Distribution
+# ===================================================================
+
 # Upload source tarball on https://pypi.python.org/pypi/psutil.
 upload-src: clean
 	$(PYTHON) setup.py sdist upload
@@ -114,15 +193,49 @@ upload-src: clean
 # Build and upload doc on https://pythonhosted.org/psutil/.
 # Requires "pip install sphinx-pypi-upload".
 upload-doc:
-	cd docs; make html
+	cd docs && make html
 	$(PYTHON) setup.py upload_sphinx --upload-dir=docs/_build/html
 
-# git-tag a new release
-git-tag-release:
-	git tag -a release-`python -c "import setup; print(setup.get_version())"` -m `git rev-list HEAD --count`:`git rev-parse --short HEAD`
-	git push --follow-tags
+# Download exes/wheels hosted on appveyor.
+win-download-exes:
+	$(PYTHON) .ci/appveyor/download_exes.py --user giampaolo --project psutil
 
-# install GIT pre-commit hook
-install-git-hooks:
-	ln -sf ../../.git-pre-commit .git/hooks/pre-commit
-	chmod +x .git/hooks/pre-commit
+# Upload exes/wheels in dist/* directory to PYPI.
+win-upload-exes:
+	$(PYTHON) -m twine upload dist/*.exe
+	$(PYTHON) -m twine upload dist/*.wheel
+
+# All the necessary steps before making a release.
+pre-release:
+	${MAKE} clean
+	${MAKE} install  # to import psutil from download_exes.py
+	$(PYTHON) -c \
+		"from psutil import __version__ as ver; \
+		readme = open('README.rst').read(); \
+		history = open('HISTORY.rst').read(); \
+		assert ver in readme, '%r not in README.rst' % ver; \
+		assert ver in history, '%r not in HISTORY.rst' % ver; \
+		assert 'XXXX' not in history, 'XXXX in HISTORY.rst'; \
+		"
+	${MAKE} setup-dev-env  # mainly to update sphinx and install twine
+	${MAKE} win-download-exes
+	$(PYTHON) setup.py sdist
+
+# Create a release: creates tar.gz and exes/wheels, uploads them,
+# upload doc, git tag release.
+release:
+	${MAKE} pre-release
+	$(PYTHON) -m twine upload dist/*  # upload tar.gz, exes, wheels on PYPI
+	${MAKE} git-tag-release
+	${MAKE} upload-doc
+
+# Print announce of new release.
+print-announce:
+	@$(PYTHON) scripts/internal/print_announce.py
+
+# ===================================================================
+# Misc
+# ===================================================================
+
+grep-todos:
+	git grep -EIn "TODO|FIXME|XXX"

@@ -34,8 +34,6 @@
 #endif
 #include <linux/ethtool.h>
 
-#include "_psutil_linux.h"
-
 /* The minimum number of CPUs allocated in a cpu_set_t */
 static const int NCPUS_START = sizeof(unsigned long) * CHAR_BIT;
 
@@ -404,7 +402,7 @@ psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args) {
 #else
         long value = PyInt_AsLong(item);
 #endif
-        if (value == -1 && PyErr_Occurred())
+        if (value == -1 || PyErr_Occurred())
             goto error;
         CPU_SET(value, &cpu_set);
     }
@@ -525,8 +523,11 @@ psutil_net_if_stats(PyObject* self, PyObject* args) {
         speed = ethcmd.speed;
     }
     else {
-        if (errno == EOPNOTSUPP) {
-            // we typically get here in case of wi-fi cards
+        if ((errno == EOPNOTSUPP) || (errno == EINVAL)) {
+            // EOPNOTSUPP may occur in case of wi-fi cards.
+            // For EINVAL see:
+            // https://github.com/giampaolo/psutil/issues/797
+            //     #issuecomment-202999532
             duplex = DUPLEX_UNKNOWN;
             speed = 0;
         }
@@ -535,17 +536,17 @@ psutil_net_if_stats(PyObject* self, PyObject* args) {
         }
     }
 
-    close(sock);
     py_retlist = Py_BuildValue("[Oiii]", py_is_up, duplex, speed, mtu);
     if (!py_retlist)
         goto error;
+    close(sock);
     Py_DECREF(py_is_up);
     return py_retlist;
 
 error:
-    Py_XDECREF(py_is_up);
-    if (sock != 0)
+    if (sock != -1)
         close(sock);
+    Py_XDECREF(py_is_up);
     PyErr_SetFromErrno(PyExc_OSError);
     return NULL;
 }

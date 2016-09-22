@@ -25,8 +25,15 @@ from ._compat import PY3
 
 __extra__all__ = ["CONN_IDLE", "CONN_BOUND", "PROCFS_PATH"]
 
+
+# =====================================================================
+# --- constants
+# =====================================================================
+
+
 PAGE_SIZE = os.sysconf('SC_PAGE_SIZE')
 AF_LINK = cext_posix.AF_LINK
+IS_64_BIT = sys.maxsize > 2**32
 
 CONN_IDLE = "IDLE"
 CONN_BOUND = "BOUND"
@@ -58,6 +65,12 @@ TCP_STATUSES = {
     cext.TCPS_BOUND: CONN_BOUND,  # sunos specific
 }
 
+
+# =====================================================================
+# --- named tuples
+# =====================================================================
+
+
 scputimes = namedtuple('scputimes', ['user', 'system', 'idle', 'iowait'])
 pcputimes = namedtuple('pcputimes',
                        ['user', 'system', 'children_user', 'children_system'])
@@ -71,25 +84,31 @@ pmmap_ext = namedtuple(
 ssysinfo = namedtuple('ssysinfo', ['ctx_switches', 'interrupts', 'nthreads',
                                    'traps', 'syscalls'])
 
-# set later from __init__.py
+
+# =====================================================================
+# --- exceptions
+# =====================================================================
+
+
+# these get overwritten on "import psutil" from the __init__.py file
 NoSuchProcess = None
 ZombieProcess = None
 AccessDenied = None
 TimeoutExpired = None
 
 
+# =====================================================================
 # --- utils
+# =====================================================================
+
 
 def get_procfs_path():
     return sys.modules['psutil'].PROCFS_PATH
 
 
-# --- functions
-
-disk_io_counters = cext.disk_io_counters
-net_io_counters = cext.net_io_counters
-disk_usage = _psposix.disk_usage
-net_if_addrs = cext_posix.net_if_addrs
+# =====================================================================
+# --- memory
+# =====================================================================
 
 
 def virtual_memory():
@@ -134,14 +153,9 @@ def swap_memory():
                          sin * PAGE_SIZE, sout * PAGE_SIZE)
 
 
-def pids():
-    """Returns a list of PIDs currently running on the system."""
-    return [int(x) for x in os.listdir(b(get_procfs_path())) if x.isdigit()]
-
-
-def pid_exists(pid):
-    """Check for the existence of a unix pid."""
-    return _psposix.pid_exists(pid)
+# =====================================================================
+# --- CPU
+# =====================================================================
 
 
 def cpu_times():
@@ -170,28 +184,20 @@ def cpu_count_physical():
     return cext.cpu_count_phys()
 
 
-def boot_time():
-    """The system boot time expressed in seconds since the epoch."""
-    return cext.boot_time()
+def cpu_stats():
+    ctx_switches, interrupts, syscalls, traps = cext.cpu_stats()
+    soft_interrupts = 0
+    return _common.scpustats(ctx_switches, interrupts, soft_interrupts,
+                             syscalls)
 
 
-def users():
-    """Return currently connected users as a list of namedtuples."""
-    retlist = []
-    rawlist = cext.users()
-    localhost = (':0.0', ':0')
-    for item in rawlist:
-        user, tty, hostname, tstamp, user_process = item
-        # note: the underlying C function includes entries about
-        # system boot, run level and others.  We might want
-        # to use them in the future.
-        if not user_process:
-            continue
-        if hostname in localhost:
-            hostname = 'localhost'
-        nt = _common.suser(user, tty, hostname, tstamp)
-        retlist.append(nt)
-    return retlist
+# =====================================================================
+# --- disks
+# =====================================================================
+
+
+disk_io_counters = cext.disk_io_counters
+disk_usage = _psposix.disk_usage
 
 
 def sysinfo():
@@ -218,6 +224,15 @@ def disk_partitions(all=False):
         ntuple = _common.sdiskpart(device, mountpoint, fstype, opts)
         retlist.append(ntuple)
     return retlist
+
+
+# =====================================================================
+# --- network
+# =====================================================================
+
+
+net_io_counters = cext.net_io_counters
+net_if_addrs = cext_posix.net_if_addrs
 
 
 def net_connections(kind, _pid=-1):
@@ -262,10 +277,55 @@ def net_if_stats():
     return ret
 
 
+# =====================================================================
+# --- other system functions
+# =====================================================================
+
+
+def boot_time():
+    """The system boot time expressed in seconds since the epoch."""
+    return cext.boot_time()
+
+
+def users():
+    """Return currently connected users as a list of namedtuples."""
+    retlist = []
+    rawlist = cext.users()
+    localhost = (':0.0', ':0')
+    for item in rawlist:
+        user, tty, hostname, tstamp, user_process = item
+        # note: the underlying C function includes entries about
+        # system boot, run level and others.  We might want
+        # to use them in the future.
+        if not user_process:
+            continue
+        if hostname in localhost:
+            hostname = 'localhost'
+        nt = _common.suser(user, tty, hostname, tstamp)
+        retlist.append(nt)
+    return retlist
+
+
+# =====================================================================
+# --- processes
+# =====================================================================
+
+
+def pids():
+    """Returns a list of PIDs currently running on the system."""
+    return [int(x) for x in os.listdir(b(get_procfs_path())) if x.isdigit()]
+
+
+def pid_exists(pid):
+    """Check for the existence of a unix pid."""
+    return _psposix.pid_exists(pid)
+
+
 def wrap_exceptions(fun):
     """Call callable into a try/except clause and translate ENOENT,
     EACCES and EPERM in NoSuchProcess or AccessDenied exceptions.
     """
+
     def wrapper(self, *args, **kwargs):
         try:
             return fun(self, *args, **kwargs)
@@ -357,7 +417,8 @@ class Process(object):
 
     @wrap_exceptions
     def ppid(self):
-        return cext.proc_basic_info(self.pid, self._procfs_path)[0]
+        self._ppid = cext.proc_basic_info(self.pid, self._procfs_path)[0]
+        return self._ppid
 
     @wrap_exceptions
     def uids(self):
@@ -373,7 +434,20 @@ class Process(object):
 
     @wrap_exceptions
     def cpu_times(self):
-        times = cext.proc_cpu_times(self.pid, self._procfs_path)
+        try:
+            times = cext.proc_cpu_times(self.pid, self._procfs_path)
+        except OSError as err:
+            if err.errno == errno.EOVERFLOW and not IS_64_BIT:
+                # We may get here if we attempt to query a 64bit process
+                # with a 32bit python.
+                # Error originates from read() and also tools like "cat"
+                # fail in the same way (!).
+                # Since there simply is no way to determine CPU times we
+                # return 0.0 as a fallback. See:
+                # https://github.com/giampaolo/psutil/issues/857
+                times = (0.0, 0.0, 0.0, 0.0)
+            else:
+                raise
         return _common.pcputimes(*times)
 
     @wrap_exceptions
@@ -437,6 +511,15 @@ class Process(object):
                 utime, stime = cext.query_process_thread(
                     self.pid, tid, procfs_path)
             except EnvironmentError as err:
+                if err.errno == errno.EOVERFLOW and not IS_64_BIT:
+                    # We may get here if we attempt to query a 64bit process
+                    # with a 32bit python.
+                    # Error originates from read() and also tools like "cat"
+                    # fail in the same way (!).
+                    # Since there simply is no way to determine CPU times we
+                    # return 0.0 as a fallback. See:
+                    # https://github.com/giampaolo/psutil/issues/857
+                    continue
                 # ENOENT == thread gone in meantime
                 if err.errno == errno.ENOENT:
                     hit_enoent = True
@@ -536,7 +619,20 @@ class Process(object):
 
         procfs_path = self._procfs_path
         retlist = []
-        rawlist = cext.proc_memory_maps(self.pid, procfs_path)
+        try:
+            rawlist = cext.proc_memory_maps(self.pid, procfs_path)
+        except OSError as err:
+            if err.errno == errno.EOVERFLOW and not IS_64_BIT:
+                # We may get here if we attempt to query a 64bit process
+                # with a 32bit python.
+                # Error originates from read() and also tools like "cat"
+                # fail in the same way (!).
+                # Since there simply is no way to determine CPU times we
+                # return 0.0 as a fallback. See:
+                # https://github.com/giampaolo/psutil/issues/857
+                return []
+            else:
+                raise
         hit_enoent = False
         for item in rawlist:
             addr, addrsize, perm, name, rss, anon, locked = item

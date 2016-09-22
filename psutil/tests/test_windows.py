@@ -18,17 +18,16 @@ import time
 import traceback
 
 try:
-    import wmi  # requires "pip install wmi"
-except ImportError:
-    wmi = None
-try:
-    import win32api  # requires "pip install pypiwin32"
+    import win32api  # requires "pip install pypiwin32" / "make setup-dev-env"
     import win32con
+    import wmi  # requires "pip install wmi" / "make setup-dev-env"
 except ImportError:
-    win32api = win32con = None
+    if os.name == 'nt':
+        raise
 
 import psutil
 from psutil import WINDOWS
+from psutil._compat import basestring
 from psutil._compat import callable
 from psutil._compat import long
 from psutil._compat import PY3
@@ -119,13 +118,11 @@ class WindowsSpecificTestCase(unittest.TestCase):
 
     # --- Process class tests
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_name(self):
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
         p = psutil.Process(self.pid)
         self.assertEqual(p.name(), w.Caption)
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_exe(self):
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
         p = psutil.Process(self.pid)
@@ -133,14 +130,12 @@ class WindowsSpecificTestCase(unittest.TestCase):
         # Being Windows paths case-insensitive we ignore that.
         self.assertEqual(p.exe().lower(), w.ExecutablePath.lower())
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_cmdline(self):
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
         p = psutil.Process(self.pid)
         self.assertEqual(' '.join(p.cmdline()),
                          w.CommandLine.replace('"', ''))
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_username(self):
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
         p = psutil.Process(self.pid)
@@ -148,7 +143,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         username = "%s\\%s" % (domain, username)
         self.assertEqual(p.username(), username)
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_rss_memory(self):
         time.sleep(0.1)
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
@@ -156,7 +150,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         rss = p.memory_info().rss
         self.assertEqual(rss, int(w.WorkingSetSize))
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_vms_memory(self):
         time.sleep(0.1)
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
@@ -170,7 +163,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         if (vms != wmi_usage) and (vms != wmi_usage * 1024):
             self.fail("wmi=%s, psutil=%s" % (wmi_usage, vms))
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_process_create_time(self):
         w = wmi.WMI().Win32_Process(ProcessId=self.pid)[0]
         p = psutil.Process(self.pid)
@@ -187,7 +179,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         num_cpus = int(os.environ['NUMBER_OF_PROCESSORS'])
         self.assertEqual(num_cpus, psutil.cpu_count())
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_total_phymem(self):
         w = wmi.WMI().Win32_ComputerSystem()[0]
         self.assertEqual(int(w.TotalPhysicalMemory),
@@ -206,7 +197,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
     #
 
     # Note: this test is not very reliable
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     @unittest.skipIf(APPVEYOR, "test not relieable on appveyor")
     def test_pids(self):
         # Note: this test might fail if the OS is starting/killing
@@ -216,7 +206,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         psutil_pids = set(psutil.pids())
         self.assertEqual(wmi_pids, psutil_pids)
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     @retry_before_failing()
     def test_disks(self):
         ps_parts = psutil.disk_partitions(all=True)
@@ -246,7 +235,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
             else:
                 self.fail("can't find partition %s" % repr(ps_part))
 
-    @unittest.skipIf(win32api is None, "pywin32 module is not installed")
     def test_num_handles(self):
         p = psutil.Process(os.getpid())
         before = p.num_handles()
@@ -257,7 +245,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         win32api.CloseHandle(handle)
         self.assertEqual(p.num_handles(), before)
 
-    @unittest.skipIf(win32api is None, "pywin32 module is not installed")
     def test_num_handles_2(self):
         # Note: this fails from time to time; I'm keen on thinking
         # it doesn't mean something is broken
@@ -315,7 +302,6 @@ class WindowsSpecificTestCase(unittest.TestCase):
         self.assertRaises(psutil.NoSuchProcess,
                           p.send_signal, signal.CTRL_BREAK_EVENT)
 
-    @unittest.skipIf(wmi is None, "wmi module is not installed")
     def test_net_if_stats(self):
         ps_names = set(cext.net_if_stats())
         wmi_adapters = wmi.WMI().Win32_NetworkAdapter()
@@ -515,7 +501,7 @@ class RemoteProcessTestCase(unittest.TestCase):
 
         if other_python is None:
             raise unittest.SkipTest(
-                    "could not find interpreter with opposite bitness")
+                "could not find interpreter with opposite bitness")
 
         if IS_64_BIT:
             cls.python64 = sys.executable
@@ -574,6 +560,92 @@ class RemoteProcessTestCase(unittest.TestCase):
         e = p.environ()
         self.assertIn("THINK_OF_A_NUMBER", e)
         self.assertEquals(e["THINK_OF_A_NUMBER"], str(os.getpid()))
+
+
+@unittest.skipUnless(WINDOWS, "not a Windows system")
+class TestServices(unittest.TestCase):
+
+    def test_win_service_iter(self):
+        valid_statuses = set([
+            "running",
+            "paused",
+            "start",
+            "pause",
+            "continue",
+            "stop",
+            "stopped",
+        ])
+        valid_start_types = set([
+            "automatic",
+            "manual",
+            "disabled",
+        ])
+        valid_statuses = set([
+            "running",
+            "paused",
+            "start_pending",
+            "pause_pending",
+            "continue_pending",
+            "stop_pending",
+            "stopped"
+        ])
+        for serv in psutil.win_service_iter():
+            data = serv.as_dict()
+            self.assertIsInstance(data['name'], basestring)
+            self.assertNotEqual(data['name'].strip(), "")
+            self.assertIsInstance(data['display_name'], basestring)
+            self.assertIsInstance(data['username'], basestring)
+            self.assertIn(data['status'], valid_statuses)
+            if data['pid'] is not None:
+                psutil.Process(data['pid'])
+            self.assertIsInstance(data['binpath'], basestring)
+            self.assertIsInstance(data['username'], basestring)
+            self.assertIsInstance(data['start_type'], basestring)
+            self.assertIn(data['start_type'], valid_start_types)
+            self.assertIn(data['status'], valid_statuses)
+            self.assertIsInstance(data['description'], basestring)
+            pid = serv.pid()
+            if pid is not None:
+                p = psutil.Process(pid)
+                self.assertTrue(p.is_running())
+            # win_service_get
+            s = psutil.win_service_get(serv.name())
+            # test __eq__
+            self.assertEqual(serv, s)
+
+    def test_win_service_get(self):
+        name = next(psutil.win_service_iter()).name()
+
+        with self.assertRaises(psutil.NoSuchProcess) as cm:
+            psutil.win_service_get(name + '???')
+        self.assertEqual(cm.exception.name, name + '???')
+
+        # test NoSuchProcess
+        service = psutil.win_service_get(name)
+        exc = WindowsError(
+            psutil._psplatform.cext.ERROR_SERVICE_DOES_NOT_EXIST, "")
+        with mock.patch("psutil._psplatform.cext.winservice_query_status",
+                        side_effect=exc):
+            self.assertRaises(psutil.NoSuchProcess, service.status)
+        with mock.patch("psutil._psplatform.cext.winservice_query_config",
+                        side_effect=exc):
+            self.assertRaises(psutil.NoSuchProcess, service.username)
+
+        # test AccessDenied
+        exc = WindowsError(
+            psutil._psplatform.cext.ERROR_ACCESS_DENIED, "")
+        with mock.patch("psutil._psplatform.cext.winservice_query_status",
+                        side_effect=exc):
+            self.assertRaises(psutil.AccessDenied, service.status)
+        with mock.patch("psutil._psplatform.cext.winservice_query_config",
+                        side_effect=exc):
+            self.assertRaises(psutil.AccessDenied, service.username)
+
+        # test __str__ and __repr__
+        self.assertIn(service.name(), str(service))
+        self.assertIn(service.display_name(), str(service))
+        self.assertIn(service.name(), repr(service))
+        self.assertIn(service.display_name(), repr(service))
 
 
 if __name__ == '__main__':

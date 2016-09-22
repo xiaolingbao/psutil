@@ -1,20 +1,16 @@
-.. image:: https://img.shields.io/pypi/dm/psutil.svg
-    :target: https://pypi.python.org/pypi/psutil#downloads
-    :alt: Downloads this month
-
-.. image:: https://api.travis-ci.org/giampaolo/psutil.png?branch=master
+.. image:: https://img.shields.io/travis/giampaolo/psutil/master.svg?maxAge=3600&label=Linux%20/%20OSX
     :target: https://travis-ci.org/giampaolo/psutil
     :alt: Linux tests (Travis)
 
-.. image:: https://ci.appveyor.com/api/projects/status/qdwvw7v1t915ywr5/branch/master?svg=true
+.. image:: https://img.shields.io/appveyor/ci/giampaolo/psutil/master.svg?maxAge=3600&label=Windows
     :target: https://ci.appveyor.com/project/giampaolo/psutil
     :alt: Windows tests (Appveyor)
 
-.. image:: https://coveralls.io/repos/giampaolo/psutil/badge.svg?branch=master&service=github
+.. image:: https://coveralls.io/repos/github/giampaolo/psutil/badge.svg?branch=master
     :target: https://coveralls.io/github/giampaolo/psutil?branch=master
     :alt: Test coverage (coverall.io)
 
-.. image:: https://img.shields.io/pypi/v/psutil.svg
+.. image:: https://img.shields.io/pypi/v/psutil.svg?label=version
     :target: https://pypi.python.org/pypi/psutil/
     :alt: Latest version
 
@@ -31,8 +27,8 @@ Quick links
 ===========
 
 - `Home page <https://github.com/giampaolo/psutil>`_
+- `Install <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_
 - `Documentation <http://pythonhosted.org/psutil/>`_
-- `Installation <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_
 - `Download <https://pypi.python.org/pypi?:action=display&name=psutil#downloads>`_
 - `Forum <http://groups.google.com/group/psutil/topics>`_
 - `Blog <http://grodola.blogspot.com/search/label/psutil>`_
@@ -43,7 +39,7 @@ Quick links
 Summary
 =======
 
-psutil (python system and process utilities) is a cross-platform library for
+psutil (process and system utilities) is a cross-platform library for
 retrieving information on **running processes** and **system utilization**
 (CPU, memory, disks, network) in Python. It is useful mainly for **system
 monitoring**, **profiling and limiting process resources** and **management of
@@ -60,23 +56,10 @@ to 3.5** (users of Python 2.4 and 2.5 may use
 Example applications
 ====================
 
-.. image:: http://psutil.googlecode.com/svn/wiki/images/top-thumb.png
-    :target: http://psutil.googlecode.com/svn/wiki/images/top.png
-    :alt: top
-
-.. image:: http://psutil.googlecode.com/svn/wiki/images/nettop-thumb.png
-    :target: http://psutil.googlecode.com/svn/wiki/images/nettop.png
-    :alt: nettop
-
-.. image:: http://psutil.googlecode.com/svn/wiki/images/iotop-thumb.png
-    :target: http://psutil.googlecode.com/svn/wiki/images/iotop.png
-    :alt: iotop
-
-See also:
-
- * https://github.com/nicolargo/glances
- * https://github.com/google/grr
- * https://github.com/Jahaja/psdash
+- https://github.com/nicolargo/glances
+- https://github.com/google/grr
+- https://github.com/Jahaja/psdash
+- https://github.com/giampaolo/psutil/tree/master/scripts
 
 ==============
 Example usages
@@ -105,7 +88,6 @@ CPU
     [7.0, 8.5, 2.4, 2.1]
     [1.2, 9.0, 9.9, 7.2]
     >>>
-    >>>
     >>> for x in range(3):
     ...     psutil.cpu_times_percent(interval=1, percpu=False)
     ...
@@ -118,6 +100,8 @@ CPU
     >>> psutil.cpu_count(logical=False)
     2
     >>>
+    >>> psutil.cpu_stats()
+    scpustats(ctx_switches=20455687, interrupts=6598984, soft_interrupts=2134212, syscalls=0)
 
 Memory
 ======
@@ -125,7 +109,7 @@ Memory
 .. code-block:: python
 
     >>> psutil.virtual_memory()
-    svmem(total=8374149120, available=2081050624, percent=75.1, used=8074080256, free=300068864, active=3294920704, inactive=1361616896, buffers=529895424, cached=1251086336)
+    svmem(total=10367352832, available=6472179712, percent=37.6, used=8186245120, free=2181107712, active=4748992512, inactive=2758115328, buffers=790724608, cached=3500347392, shared=787554304)
     >>> psutil.swap_memory()
     sswap(total=2097147904, used=296128512, free=1801019392, percent=14.1, sin=304193536, sout=677842944)
     >>>
@@ -293,7 +277,8 @@ Process management
     >>>
     >>> p.environ()
     {'LC_PAPER': 'it_IT.UTF-8', 'SHELL': '/bin/bash', 'GREP_OPTIONS': '--color=auto',
-    'XDG_CONFIG_DIRS': '/etc/xdg/xdg-ubuntu:/usr/share/upstart/xdg:/etc/xdg', 'COLORTERM': 'gnome-terminal', ...}
+    'XDG_CONFIG_DIRS': '/etc/xdg/xdg-ubuntu:/usr/share/upstart/xdg:/etc/xdg', 'COLORTERM': 'gnome-terminal',
+     ...}
     >>>
     >>> p.suspend()
     >>> p.resume()
@@ -330,8 +315,30 @@ Further process APIs
     ...     print("process {} terminated".format(proc))
     ...
     >>> # waits for multiple processes to terminate
-    >>> gone, alive = psutil.wait_procs(procs_list, 3, callback=on_terminate)
+    >>> gone, alive = psutil.wait_procs(procs_list, timeout=3, callback=on_terminate)
     >>>
+
+Windows services
+================
+
+.. code-block:: python
+
+    >>> list(psutil.win_service_iter())
+    [<WindowsService(name='AeLookupSvc', display_name='Application Experience') at 38850096>,
+     <WindowsService(name='ALG', display_name='Application Layer Gateway Service') at 38850128>,
+     <WindowsService(name='APNMCP', display_name='Ask Update Service') at 38850160>,
+     <WindowsService(name='AppIDSvc', display_name='Application Identity') at 38850192>,
+     ...]
+    >>> s = psutil.win_service_get('alg')
+    >>> s.as_dict()
+    {'binpath': 'C:\\Windows\\System32\\alg.exe',
+     'description': 'Provides support for 3rd party protocol plug-ins for Internet Connection Sharing',
+     'display_name': 'Application Layer Gateway Service',
+     'name': 'alg',
+     'pid': None,
+     'start_type': 'manual',
+     'status': 'stopped',
+     'username': 'NT AUTHORITY\\LocalService'}
 
 ======
 Donate
@@ -357,6 +364,10 @@ http://groups.google.com/group/psutil/
 Timeline
 ========
 
+- 2016-09-01: `psutil-4.3.1.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-4.3.1.tar.gz>`_
+- 2016-06-18: `psutil-4.3.0.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-4.3.0.tar.gz>`_
+- 2016-05-15: `psutil-4.2.0.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-4.2.0.tar.gz>`_
+- 2016-03-12: `psutil-4.1.0.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-4.1.0.tar.gz>`_
 - 2016-02-17: `psutil-4.0.0.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-4.0.0.tar.gz>`_
 - 2016-01-20: `psutil-3.4.2.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-3.4.2.tar.gz>`_
 - 2016-01-15: `psutil-3.4.1.tar.gz <https://pypi.python.org/packages/source/p/psutil/psutil-3.4.1.tar.gz>`_

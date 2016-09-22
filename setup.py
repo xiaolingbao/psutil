@@ -92,6 +92,7 @@ if _common.WINDOWS:
             'psutil/arch/windows/process_handles.c',
             'psutil/arch/windows/security.c',
             'psutil/arch/windows/inet_ntop.c',
+            'psutil/arch/windows/services.c',
         ],
         define_macros=[
             VERSION_MACRO,
@@ -225,7 +226,7 @@ def main():
             'monitoring', 'ulimit', 'prlimit', 'smem',
         ],
         author='Giampaolo Rodola',
-        author_email='g.rodola <at> gmail <dot> com',
+        author_email='g.rodola@gmail.com',
         url='https://github.com/giampaolo/psutil',
         platforms='Platform Independent',
         license='BSD',

@@ -341,7 +341,7 @@ class TestSystemAPIs(unittest.TestCase):
         summed_values = base._make([sum(num) for num in zip(*per_cpu)])
         for field in base._fields:
             self.assertAlmostEqual(
-                getattr(base, field), getattr(summed_values, field), delta=0.1)
+                getattr(base, field), getattr(summed_values, field), delta=1)
 
     def _test_cpu_percent(self, percent, last_ret, new_ret):
         try:
@@ -359,6 +359,8 @@ class TestSystemAPIs(unittest.TestCase):
             new = psutil.cpu_percent(interval=None)
             self._test_cpu_percent(new, last, new)
             last = new
+        with self.assertRaises(ValueError):
+            psutil.cpu_percent(interval=-1)
 
     def test_per_cpu_percent(self):
         last = psutil.cpu_percent(interval=0.001, percpu=True)
@@ -368,6 +370,8 @@ class TestSystemAPIs(unittest.TestCase):
             for percent in new:
                 self._test_cpu_percent(percent, last, new)
             last = new
+        with self.assertRaises(ValueError):
+            psutil.cpu_percent(interval=-1, percpu=True)
 
     def test_cpu_times_percent(self):
         last = psutil.cpu_times_percent(interval=0.001)
@@ -683,6 +687,15 @@ class TestSystemAPIs(unittest.TestCase):
         infos = psutil.sysinfo()
         for name in infos._fields:
             self.assertGreaterEqual(getattr(infos, name), 0)
+
+    def test_cpu_stats(self):
+        # Tested more extensively in per-platform test modules.
+        infos = psutil.cpu_stats()
+        for name in infos._fields:
+            value = getattr(infos, name)
+            self.assertGreaterEqual(value, 0)
+            if name in ('ctx_switches', 'interrupts'):
+                self.assertGreater(value, 0)
 
 
 if __name__ == '__main__':

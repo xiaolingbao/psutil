@@ -59,7 +59,6 @@
 #include <netinet/in.h>   // process open files/connections
 #include <sys/un.h>
 
-#include "_psutil_bsd.h"
 #include "_psutil_common.h"
 
 #ifdef __FreeBSD__
@@ -712,16 +711,20 @@ psutil_disk_partitions(PyObject *self, PyObject *args) {
             strlcat(opts, ",union", sizeof(opts));
         if (flags & MNT_NOCOREDUMP)
             strlcat(opts, ",nocoredump", sizeof(opts));
+#if defined(MNT_RELATIME)
         if (flags & MNT_RELATIME)
             strlcat(opts, ",relatime", sizeof(opts));
+#endif
         if (flags & MNT_IGNORE)
             strlcat(opts, ",ignore", sizeof(opts));
 #if defined(MNT_DISCARD)
         if (flags & MNT_DISCARD)
             strlcat(opts, ",discard", sizeof(opts));
 #endif
+#if defined(MNT_EXTATTR)
         if (flags & MNT_EXTATTR)
             strlcat(opts, ",extattr", sizeof(opts));
+#endif
         if (flags & MNT_LOG)
             strlcat(opts, ",log", sizeof(opts));
         if (flags & MNT_SYMPERM)
@@ -1020,6 +1023,8 @@ PsutilMethods[] = {
      "Return currently connected users as a list of tuples"},
     {"sysinfo", psutil_sysinfo, METH_VARARGS,
      "Return various system stats"},
+    {"cpu_stats", psutil_cpu_stats, METH_VARARGS,
+     "Return CPU statistics"},
 #if defined(__FreeBSD__) || defined(__NetBSD__)
     {"net_connections", psutil_net_connections, METH_VARARGS,
      "Return system-wide open connections."},

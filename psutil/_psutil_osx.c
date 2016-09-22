@@ -39,7 +39,6 @@
 #include <IOKit/storage/IOMedia.h>
 #include <IOKit/IOBSD.h>
 
-#include "_psutil_osx.h"
 #include "_psutil_common.h"
 #include "arch/osx/process_info.h"
 
@@ -1789,6 +1788,35 @@ error:
 
 
 /*
+ * Return CPU statistics.
+ */
+static PyObject *
+psutil_cpu_stats(PyObject *self, PyObject *args) {
+    struct vmmeter vmstat;
+    kern_return_t ret;
+    mach_msg_type_number_t count = sizeof(vmstat) / sizeof(integer_t);
+    mach_port_t mport = mach_host_self();
+
+    ret = host_statistics(mport, HOST_VM_INFO, (host_info_t)&vmstat, &count);
+    if (ret != KERN_SUCCESS) {
+        PyErr_Format(PyExc_RuntimeError,
+                     "host_statistics() failed: %s", mach_error_string(ret));
+        return NULL;
+    }
+    mach_port_deallocate(mach_task_self(), mport);
+
+    return Py_BuildValue(
+        "IIIII",
+        vmstat.v_swtch,  // ctx switches
+        vmstat.v_intr,  // interrupts
+        vmstat.v_soft,  // software interrupts
+        vmstat.v_syscall,  // syscalls
+        vmstat.v_trap  // traps
+    );
+}
+
+
+/*
  * Return various system info.
  */
 static PyObject *
@@ -1908,6 +1936,8 @@ PsutilMethods[] = {
      "Return dict of tuples of disks I/O information."},
     {"users", psutil_users, METH_VARARGS,
      "Return currently connected users as a list of tuples"},
+    {"cpu_stats", psutil_cpu_stats, METH_VARARGS,
+     "Return CPU statistics"},
     {"sysinfo", psutil_sysinfo, METH_VARARGS,
      "Return various system info"},
 

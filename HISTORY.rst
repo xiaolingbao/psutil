@@ -1,6 +1,93 @@
 Bug tracker at https://github.com/giampaolo/psutil/issues
 
-4.1.0 - XXXX-XX-XX
+
+4.4.0 - XXXX-XX-XX
+==================
+
+**Enhancements**
+
+#891: procinfo.py script has been updated and provides a lot more info.
+
+**Bug fixes**
+
+- #798: [Windows] Process.open_files() returns and empty list on Windows 10.
+- #880: [Windows] Handle race condition inside psutil_net_connections.
+- #885: ValueError is raised if a negative integer is passed to cpu_percent()
+  functions.
+- #887: [Linux] virtual_memory()'s 'available' and 'used' values are more
+  precise and match "free" cmdline utility.  "available" also takes into
+  account LCX containers preventing "available" to overflow "total".
+
+
+4.3.1 - 2016-09-01
+==================
+
+**Enhancements**
+
+- #881: "make install" now works also when using a virtual env.
+
+**Bug fixes**
+
+- #854: Process.as_dict() raises ValueError if passed an erroneous attrs name.
+- #857: [SunOS] Process cpu_times(), cpu_percent(), threads() amd memory_maps()
+  may raise RuntimeError if attempting to query a 64bit process with a 32bit
+  python. "Null" values are returned as a fallback.
+- #858: Process.as_dict() should not return memory_info_ex() because it's
+  deprecated.
+- #863: [Windows] memory_map truncates addresses above 32 bits
+- #866: [Windows] win_service_iter() and services in general are not able to
+  handle unicode service names / descriptions.
+- #869: [Windows] Process.wait() may raise TimeoutExpired with wrong timeout
+  unit (ms instead of sec).
+- #870: [Windows] Handle leak inside psutil_get_process_data.
+
+
+4.3.0 - 2016-06-18
+==================
+
+**Enhancements**
+
+- #819: [Linux] different speedup improvements:
+  Process.ppid() is 20% faster
+  Process.status() is 28% faster
+  Process.name() is 25% faster
+  Process.num_threads is 20% faster on Python 3
+
+**Bug fixes**
+
+- #810: [Windows] Windows wheels are incompatible with pip 7.1.2.
+- #812: [NetBSD] fix compilation on NetBSD-5.x.
+- #823: [NetBSD] virtual_memory() raises TypeError on Python 3.
+- #829: [UNIX] psutil.disk_usage() percent field takes root reserved space
+  into account.
+- #816: [Windows] fixed net_io_counter() values wrapping after 4.3GB in
+  Windows Vista (NT 6.0) and above using 64bit values from newer win APIs.
+
+
+4.2.0 - 2016-05-14
+==================
+
+**Enhancements**
+
+- #795: [Windows] new APIs to deal with Windows services: win_service_iter()
+  and win_service_get().
+- #800: [Linux] psutil.virtual_memory() returns a new "shared" memory field.
+- #819: [Linux] speedup /proc parsing:
+  - Process.ppid() is 20% faster
+  - Process.status() is 28% faster
+  - Process.name() is 25% faster
+  - Process.num_threads is 20% faster on Python 3
+
+**Bug fixes**
+
+- #797: [Linux] net_if_stats() may raise OSError for certain NIC cards.
+- #813: Process.as_dict() should ignore extraneous attribute names which gets
+  attached to the Process instance.
+- #825: Fix possible double close and use of unopened socket
+
+
+4.1.0 - 2016-03-12
+==================
 
 **Enhancements**
 
@@ -8,6 +95,10 @@ Bug tracker at https://github.com/giampaolo/psutil/issues
   mode and flags.
 - #779: Process.cpu_times() returns two new fields, 'children_user' and
   'children_system' (always set to 0 on OSX and Windows).
+- #789: [Windows] psutil.cpu_times() return two new fields: "interrupt" and
+  "dpc". Same for psutil.cpu_times_percent().
+- #792: new psutil.cpu_stats() function returning number of CPU ctx switches
+  interrupts, soft interrupts and syscalls.
 
 **Bug fixes**
 

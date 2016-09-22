@@ -26,14 +26,6 @@ import types
 from socket import AF_INET
 from socket import SOCK_DGRAM
 from socket import SOCK_STREAM
-try:
-    import ipaddress  # python >= 3.3
-except ImportError:
-    ipaddress = None
-try:
-    from unittest import mock  # py3
-except ImportError:
-    import mock  # requires "pip install mock"
 
 import psutil
 
@@ -64,8 +56,9 @@ from psutil.tests import enum
 from psutil.tests import get_test_subprocess
 from psutil.tests import get_winver
 from psutil.tests import GLOBAL_TIMEOUT
-from psutil.tests import pyrun
+from psutil.tests import mock
 from psutil.tests import PYPY
+from psutil.tests import pyrun
 from psutil.tests import PYTHON
 from psutil.tests import reap_children
 from psutil.tests import retry_before_failing
@@ -228,9 +221,7 @@ class TestProcess(unittest.TestCase):
             ret = grandson_proc.wait()
             self.assertEqual(ret, None)
         finally:
-            if grandson_proc.is_running():
-                grandson_proc.kill()
-                grandson_proc.wait()
+            reap_children(recursive=True)
 
     def test_wait_timeout_0(self):
         sproc = get_test_subprocess()
@@ -264,6 +255,8 @@ class TestProcess(unittest.TestCase):
                 self.assertLessEqual(percent, 100.0)
             else:
                 self.assertGreaterEqual(percent, 0.0)
+        with self.assertRaises(ValueError):
+            p.cpu_percent(interval=-1)
 
     def test_cpu_times(self):
         times = psutil.Process().cpu_times()
@@ -387,13 +380,13 @@ class TestProcess(unittest.TestCase):
                 self.assertRaises(ValueError, p.ionice, 2, -1)
                 self.assertRaises(ValueError, p.ionice, 4)
                 self.assertRaises(TypeError, p.ionice, 2, "foo")
-                self.assertRaisesRegexp(
+                self.assertRaisesRegex(
                     ValueError, "can't specify value with IOPRIO_CLASS_NONE",
                     p.ionice, psutil.IOPRIO_CLASS_NONE, 1)
-                self.assertRaisesRegexp(
+                self.assertRaisesRegex(
                     ValueError, "can't specify value with IOPRIO_CLASS_IDLE",
                     p.ionice, psutil.IOPRIO_CLASS_IDLE, 1)
-                self.assertRaisesRegexp(
+                self.assertRaisesRegex(
                     ValueError, "'ioclass' argument must be specified",
                     p.ionice, value=1)
             finally:
@@ -564,17 +557,20 @@ class TestProcess(unittest.TestCase):
     # see: https://travis-ci.org/giampaolo/psutil/jobs/111842553
     @unittest.skipIf(OSX and TRAVIS, "")
     def test_threads_2(self):
-        p = psutil.Process()
+        sproc = get_test_subprocess(wait=True)
+        p = psutil.Process(sproc.pid)
         if OPENBSD:
             try:
                 p.threads()
             except psutil.AccessDenied:
                 raise unittest.SkipTest(
                     "on OpenBSD this requires root access")
-        self.assertAlmostEqual(p.cpu_times().user,
-                               p.threads()[0].user_time, delta=0.1)
-        self.assertAlmostEqual(p.cpu_times().system,
-                               p.threads()[0].system_time, delta=0.1)
+        self.assertAlmostEqual(
+            p.cpu_times().user,
+            sum([x.user_time for x in p.threads()]), delta=0.1)
+        self.assertAlmostEqual(
+            p.cpu_times().system,
+            sum([x.system_time for x in p.threads()]), delta=0.1)
 
     def test_memory_info(self):
         p = psutil.Process()
@@ -1139,6 +1135,7 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(p.ppid(), this_parent)
         self.assertEqual(p.parent().pid, this_parent)
         # no other process is supposed to have us as parent
+        reap_children(recursive=True)
         for p in psutil.process_iter():
             if p.pid == sproc.pid:
                 continue
@@ -1220,14 +1217,22 @@ class TestProcess(unittest.TestCase):
         if not isinstance(d['connections'], list):
             self.assertEqual(d['connections'], 'foo')
 
-        with mock.patch('psutil.getattr', create=True,
+        with mock.patch('psutil.Process.name', create=True,
                         side_effect=NotImplementedError):
             # By default APIs raising NotImplementedError are
             # supposed to be skipped.
-            self.assertEqual(p.as_dict(), {})
+            d = p.as_dict()
+            self.assertNotIn('name', list(d.keys()))
             # ...unless the user explicitly asked for some attr.
             with self.assertRaises(NotImplementedError):
                 p.as_dict(attrs=["name"])
+        # errors
+        with self.assertRaises(TypeError):
+            p.as_dict('name')
+        with self.assertRaises(ValueError):
+            p.as_dict(['foo'])
+        with self.assertRaises(ValueError):
+            p.as_dict(['foo', 'bar'])
 
     def test_halfway_terminated_process(self):
         # Test that NoSuchProcess exception gets raised in case the
@@ -1247,7 +1252,8 @@ class TestProcess(unittest.TestCase):
         # self.assertFalse(p.pid in psutil.pids(), msg="retcode = %s" %
         #   retcode)
 
-        excluded_names = ['pid', 'is_running', 'wait', 'create_time']
+        excluded_names = ['pid', 'is_running', 'wait', 'create_time',
+                          'memory_info_ex']
         if LINUX and not RLIMIT_SUPPORT:
             excluded_names.append('rlimit')
         for name in dir(p):
@@ -1327,6 +1333,7 @@ class TestProcess(unittest.TestCase):
                 sock.listen(1)
                 pyrun(src)
                 conn, _ = sock.accept()
+                self.addCleanup(conn.close)
                 select.select([conn.fileno()], [], [], GLOBAL_TIMEOUT)
                 zpid = int(conn.recv(1024))
                 zproc = psutil.Process(zpid)
@@ -1383,7 +1390,7 @@ class TestProcess(unittest.TestCase):
                 psutil._pmap = {}
                 self.assertIn(zpid, [x.pid for x in psutil.process_iter()])
             finally:
-                reap_children(search_all=True)
+                reap_children(recursive=True)
 
     def test_pid_0(self):
         # Process(0) is supposed to work on all platforms except Linux
@@ -1401,7 +1408,7 @@ class TestProcess(unittest.TestCase):
             except psutil.AccessDenied:
                 pass
 
-            self.assertRaisesRegexp(
+            self.assertRaisesRegex(
                 ValueError, "preventing sending signal to process with PID 0",
                 p.send_signal, signal.SIGTERM)
 
@@ -1496,7 +1503,7 @@ class TestProcess(unittest.TestCase):
             return execve("/bin/cat", argv, envp);
         }
         """)
-        path = create_temp_executable_file("x", code=code)
+        path = create_temp_executable_file("x", c_code=code)
         self.addCleanup(safe_remove, path)
         sproc = get_test_subprocess([path],
                                     stdin=subprocess.PIPE,
@@ -1801,55 +1808,53 @@ class TestFetchAllProcesses(unittest.TestCase):
 # --- Limited user tests
 # ===================================================================
 
-@unittest.skipUnless(POSIX, "UNIX only")
-@unittest.skipUnless(hasattr(os, 'getuid') and os.getuid() == 0,
-                     "super user privileges are required")
-class LimitedUserTestCase(TestProcess):
-    """Repeat the previous tests by using a limited user.
-    Executed only on UNIX and only if the user who run the test script
-    is root.
-    """
-    # the uid/gid the test suite runs under
-    if hasattr(os, 'getuid'):
-        PROCESS_UID = os.getuid()
-        PROCESS_GID = os.getgid()
+if POSIX and os.getuid() == 0:
+    class LimitedUserTestCase(TestProcess):
+        """Repeat the previous tests by using a limited user.
+        Executed only on UNIX and only if the user who run the test script
+        is root.
+        """
+        # the uid/gid the test suite runs under
+        if hasattr(os, 'getuid'):
+            PROCESS_UID = os.getuid()
+            PROCESS_GID = os.getgid()
 
-    def __init__(self, *args, **kwargs):
-        TestProcess.__init__(self, *args, **kwargs)
-        # re-define all existent test methods in order to
-        # ignore AccessDenied exceptions
-        for attr in [x for x in dir(self) if x.startswith('test')]:
-            meth = getattr(self, attr)
+        def __init__(self, *args, **kwargs):
+            TestProcess.__init__(self, *args, **kwargs)
+            # re-define all existent test methods in order to
+            # ignore AccessDenied exceptions
+            for attr in [x for x in dir(self) if x.startswith('test')]:
+                meth = getattr(self, attr)
 
-            def test_(self):
-                try:
-                    meth()
-                except psutil.AccessDenied:
-                    pass
-            setattr(self, attr, types.MethodType(test_, self))
+                def test_(self):
+                    try:
+                        meth()
+                    except psutil.AccessDenied:
+                        pass
+                setattr(self, attr, types.MethodType(test_, self))
 
-    def setUp(self):
-        safe_remove(TESTFN)
-        TestProcess.setUp(self)
-        os.setegid(1000)
-        os.seteuid(1000)
+        def setUp(self):
+            safe_remove(TESTFN)
+            TestProcess.setUp(self)
+            os.setegid(1000)
+            os.seteuid(1000)
 
-    def tearDown(self):
-        os.setegid(self.PROCESS_UID)
-        os.seteuid(self.PROCESS_GID)
-        TestProcess.tearDown(self)
+        def tearDown(self):
+            os.setegid(self.PROCESS_UID)
+            os.seteuid(self.PROCESS_GID)
+            TestProcess.tearDown(self)
 
-    def test_nice(self):
-        try:
-            psutil.Process().nice(-1)
-        except psutil.AccessDenied:
+        def test_nice(self):
+            try:
+                psutil.Process().nice(-1)
+            except psutil.AccessDenied:
+                pass
+            else:
+                self.fail("exception not raised")
+
+        def test_zombie_process(self):
+            # causes problems if test test suite is run as root
             pass
-        else:
-            self.fail("exception not raised")
-
-    def test_zombie_process(self):
-        # causes problems if test test suite is run as root
-        pass
 
 
 # ===================================================================

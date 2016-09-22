@@ -179,6 +179,7 @@ __all__ = [
     "pid_exists", "pids", "process_iter", "wait_procs",             # proc
     "virtual_memory", "swap_memory",                                # memory
     "cpu_times", "cpu_percent", "cpu_times_percent", "cpu_count",   # cpu
+    "cpu_stats",
     "net_io_counters", "net_connections", "net_if_addrs",           # network
     "net_if_stats",
     "disk_io_counters", "disk_partitions", "disk_usage",            # disk
@@ -186,7 +187,7 @@ __all__ = [
 ]
 __all__.extend(_psplatform.__extra__all__)
 __author__ = "Giampaolo Rodola'"
-__version__ = "4.0.0"
+__version__ = "4.4.0"
 version_info = tuple([int(num) for num in __version__.split('.')])
 AF_LINK = _psplatform.AF_LINK
 _TOTAL_PHYMEM = None
@@ -457,22 +458,26 @@ class Process(object):
         AccessDenied or ZombieProcess exception is raised when
         retrieving that particular process information.
         """
-        excluded_names = set(
-            ['send_signal', 'suspend', 'resume', 'terminate', 'kill', 'wait',
-             'is_running', 'as_dict', 'parent', 'children', 'rlimit'])
+        valid_names = _as_dict_attrnames
+        if attrs is not None:
+            if not isinstance(attrs, (list, tuple, set, frozenset)):
+                raise TypeError("invalid attrs type %s" % type(attrs))
+            attrs = set(attrs)
+            invalid_names = attrs - valid_names
+            if invalid_names:
+                raise ValueError("invalid attr name%s %s" % (
+                    "s" if len(invalid_names) > 1 else "",
+                    ", ".join(map(repr, invalid_names))))
+
         retdict = dict()
-        ls = set(attrs or [x for x in dir(self)])
+        ls = attrs or valid_names
         for name in ls:
-            if name.startswith('_'):
-                continue
-            if name in excluded_names:
-                continue
             try:
-                attr = getattr(self, name)
-                if callable(attr):
-                    ret = attr()
+                if name == 'pid':
+                    ret = self.pid
                 else:
-                    ret = attr
+                    meth = getattr(self, name)
+                    ret = meth()
             except (AccessDenied, ZombieProcess):
                 ret = ad_value
             except NotImplementedError:
@@ -916,13 +921,17 @@ class Process(object):
           >>>
         """
         blocking = interval is not None and interval > 0.0
-        num_cpus = cpu_count()
+        if interval is not None and interval < 0:
+            raise ValueError("interval is not positive (got %r)" % interval)
+        num_cpus = cpu_count() or 1
+
         if POSIX:
             def timer():
                 return _timer() * num_cpus
         else:
             def timer():
                 return sum(cpu_times())
+
         if blocking:
             st1 = timer()
             pt1 = self._proc.cpu_times()
@@ -946,18 +955,31 @@ class Process(object):
         self._last_proc_cpu_times = pt2
 
         try:
-            # The utilization split between all CPUs.
-            # Note: a percentage > 100 is legitimate as it can result
-            # from a process with multiple threads running on different
-            # CPU cores, see:
-            # http://stackoverflow.com/questions/1032357
-            # https://github.com/giampaolo/psutil/issues/474
-            overall_percent = ((delta_proc / delta_time) * 100) * num_cpus
+            # This is the utilization split evenly between all CPUs.
+            # E.g. a busy loop process on a 2-CPU-cores system at this
+            # point is reported as 50% instead of 100%.
+            overall_cpus_percent = ((delta_proc / delta_time) * 100)
         except ZeroDivisionError:
             # interval was too low
             return 0.0
         else:
-            return round(overall_percent, 1)
+            # Note 1.
+            # in order to emulate "top" we multiply the value for the num
+            # of CPU cores. This way the busy process will be reported as
+            # having 100% (or more) usage.
+            #
+            # Note 2:
+            # taskmgr.exe on Windows differs in that it will show 50%
+            # instead.
+            #
+            # Note #3:
+            # a percentage > 100 is legitimate as it can result from a
+            # process with multiple threads running on different CPU
+            # cores (top does the same), see:
+            # http://stackoverflow.com/questions/1032357
+            # https://github.com/giampaolo/psutil/issues/474
+            single_cpu_percent = overall_cpus_percent * num_cpus
+            return round(single_cpu_percent, 1)
 
     def cpu_times(self):
         """Return a (user, system, children_user, children_system)
@@ -1223,7 +1245,7 @@ class Popen(Process):
     For method names common to both classes such as kill(), terminate()
     and wait(), psutil.Process implementation takes precedence.
 
-    Unlike subprocess.Popen this class pre-emptively checks wheter PID
+    Unlike subprocess.Popen this class pre-emptively checks whether PID
     has been reused on send_signal(), terminate() and kill() so that
     you don't accidentally terminate another process, fixing
     http://bugs.python.org/issue6973.
@@ -1258,6 +1280,14 @@ class Popen(Process):
         ret = super(Popen, self).wait(timeout)
         self.__subproc.returncode = ret
         return ret
+
+
+# The valid attr names which can be processed by Process.as_dict().
+_as_dict_attrnames = set(
+    [x for x in dir(Process) if not x.startswith('_') and x not in
+     ['send_signal', 'suspend', 'resume', 'terminate', 'kill', 'wait',
+      'is_running', 'as_dict', 'parent', 'children', 'rlimit',
+      'memory_info_ex']])
 
 
 # =====================================================================
@@ -1540,6 +1570,8 @@ def cpu_percent(interval=None, percpu=False):
     global _last_cpu_times
     global _last_per_cpu_times
     blocking = interval is not None and interval > 0.0
+    if interval is not None and interval < 0:
+        raise ValueError("interval is not positive (got %r)" % interval)
 
     def calculate(t1, t2):
         t1_all = sum(t1)
@@ -1613,6 +1645,8 @@ def cpu_times_percent(interval=None, percpu=False):
     global _last_cpu_times_2
     global _last_per_cpu_times_2
     blocking = interval is not None and interval > 0.0
+    if interval is not None and interval < 0:
+        raise ValueError("interval is not positive (got %r)" % interval)
 
     def calculate(t1, t2):
         nums = []
@@ -1672,6 +1706,11 @@ def cpu_times_percent(interval=None, percpu=False):
         for t1, t2 in zip(tot1, _last_per_cpu_times_2):
             ret.append(calculate(t1, t2))
         return ret
+
+
+def cpu_stats():
+    """Return CPU statistics."""
+    return _psplatform.cpu_stats()
 
 
 # =====================================================================
@@ -1889,7 +1928,7 @@ def net_if_addrs():
     'address' is the primary address and it is always set.
     'netmask' and 'broadcast' and 'ptp' may be None.
     'ptp' stands for "point to point" and references the destination
-    address on a point to point interface (tipically a VPN).
+    address on a point to point interface (typically a VPN).
     'broadcast' and 'ptp' are mutually exclusive.
 
     Note: you can have more than one address of the same family
@@ -1972,6 +2011,29 @@ def sysinfo():
     return _psplatform.sysinfo()
 
 
+# =====================================================================
+# --- Windows services
+# =====================================================================
+
+
+if WINDOWS:
+
+    def win_service_iter():
+        """Return a generator yielding a WindowsService instance for all
+        Windows services installed.
+        """
+        return _psplatform.win_service_iter()
+
+    def win_service_get(name):
+        """Get a Windows service by name.
+        Raise NoSuchProcess if no service with such name exists.
+        """
+        return _psplatform.win_service_get(name)
+
+
+# =====================================================================
+
+
 def test():  # pragma: no cover
     """List info of all currently running processes emulating ps aux
     output.
@@ -2029,8 +2091,8 @@ def test():  # pragma: no cover
 
 
 del memoize, division, deprecated_method
-if sys.version_info < (3, 0):
-    del num
+if sys.version_info[0] < 3:
+    del num, x
 
 if __name__ == "__main__":
     test()

@@ -23,7 +23,11 @@ from ._common import usage_percent
 
 __extra__all__ = []
 
+
+# =====================================================================
 # --- constants
+# =====================================================================
+
 
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 AF_LINK = cext_posix.AF_LINK
@@ -71,14 +75,17 @@ pmmap_grouped = namedtuple(
 pmmap_ext = namedtuple(
     'pmmap_ext', 'addr perms ' + ' '.join(pmmap_grouped._fields))
 
-# set later from __init__.py
+# these get overwritten on "import psutil" from the __init__.py file
 NoSuchProcess = None
 ZombieProcess = None
 AccessDenied = None
 TimeoutExpired = None
 
 
-# --- functions
+# =====================================================================
+# --- memory
+# =====================================================================
+
 
 def virtual_memory():
     """System virtual memory as a namedtuple."""
@@ -95,6 +102,11 @@ def swap_memory():
     total, used, free, sin, sout = cext.swap_mem()
     percent = usage_percent(used, total, _round=1)
     return _common.sswap(total, used, free, percent, sin, sout)
+
+
+# =====================================================================
+# --- CPU
+# =====================================================================
 
 
 def cpu_times():
@@ -123,9 +135,20 @@ def cpu_count_physical():
     return cext.cpu_count_phys()
 
 
-def boot_time():
-    """The system boot time expressed in seconds since the epoch."""
-    return cext.boot_time()
+def cpu_stats():
+    ctx_switches, interrupts, soft_interrupts, syscalls, traps = \
+        cext.cpu_stats()
+    return _common.scpustats(
+        ctx_switches, interrupts, soft_interrupts, syscalls)
+
+
+# =====================================================================
+# --- disks
+# =====================================================================
+
+
+disk_usage = _psposix.disk_usage
+disk_io_counters = cext.disk_io_counters
 
 
 def disk_partitions(all=False):
@@ -143,18 +166,13 @@ def disk_partitions(all=False):
     return retlist
 
 
-def users():
-    retlist = []
-    rawlist = cext.users()
-    for item in rawlist:
-        user, tty, hostname, tstamp = item
-        if tty == '~':
-            continue  # reboot or shutdown
-        if not tstamp:
-            continue
-        nt = _common.suser(user, tty or None, hostname or None, tstamp)
-        retlist.append(nt)
-    return retlist
+# =====================================================================
+# --- network
+# =====================================================================
+
+
+net_io_counters = cext.net_io_counters
+net_if_addrs = cext_posix.net_if_addrs
 
 
 def sysinfo():
@@ -191,12 +209,37 @@ def net_if_stats():
     return ret
 
 
+# =====================================================================
+# --- other system functions
+# =====================================================================
+
+
+def boot_time():
+    """The system boot time expressed in seconds since the epoch."""
+    return cext.boot_time()
+
+
+def users():
+    retlist = []
+    rawlist = cext.users()
+    for item in rawlist:
+        user, tty, hostname, tstamp = item
+        if tty == '~':
+            continue  # reboot or shutdown
+        if not tstamp:
+            continue
+        nt = _common.suser(user, tty or None, hostname or None, tstamp)
+        retlist.append(nt)
+    return retlist
+
+
+# =====================================================================
+# --- processes
+# =====================================================================
+
+
 pids = cext.pids
 pid_exists = _psposix.pid_exists
-disk_usage = _psposix.disk_usage
-net_io_counters = cext.net_io_counters
-disk_io_counters = cext.disk_io_counters
-net_if_addrs = cext_posix.net_if_addrs
 
 
 def wrap_exceptions(fun):
@@ -251,7 +294,8 @@ class Process(object):
 
     @wrap_exceptions
     def ppid(self):
-        return cext.proc_ppid(self.pid)
+        self._ppid = cext.proc_ppid(self.pid)
+        return self._ppid
 
     @wrap_exceptions
     def cwd(self):
@@ -270,7 +314,7 @@ class Process(object):
     @wrap_exceptions
     def terminal(self):
         tty_nr = cext.proc_tty_nr(self.pid)
-        tmap = _psposix._get_terminal_map()
+        tmap = _psposix.get_terminal_map()
         try:
             return tmap[tty_nr]
         except KeyError:
