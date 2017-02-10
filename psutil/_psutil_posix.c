@@ -298,12 +298,12 @@ error:
 
 
 /*
- * Inspect NIC flags, returns a bool indicating whether the NIC is
+ * Inspect NIC flags and returns a bool indicating whether the NIC is
  * running. References:
  * http://www.i-scream.org/libstatgrab/
  */
 static PyObject *
-psutil_net_if_flags(PyObject *self, PyObject *args) {
+psutil_net_if_isup(PyObject *self, PyObject *args) {
     char *nic_name;
     int sock = 0;
     int ret;
@@ -546,7 +546,7 @@ PsutilMethods[] = {
      "Retrieve NICs information"},
     {"net_if_mtu", psutil_net_if_mtu, METH_VARARGS,
      "Retrieve NIC MTU"},
-    {"net_if_flags", psutil_net_if_flags, METH_VARARGS,
+    {"net_if_isup", psutil_net_if_isup, METH_VARARGS,
      "Retrieve NIC flags"},
 #if defined(PSUTIL_BSD) || defined(PSUTIL_OSX)
     {"net_if_duplex_speed", psutil_net_if_duplex_speed, METH_VARARGS,
