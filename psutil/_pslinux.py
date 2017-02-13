@@ -1144,7 +1144,7 @@ def sensors_fans():
 
         ret[unit_name].append((label, current))
 
-    return ret
+    return dict(ret)
 
 
 def sensors_battery():
