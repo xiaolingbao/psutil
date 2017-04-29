@@ -33,7 +33,6 @@ Using [1] with some modificatons for including ftp
 [7] https://codereview.stackexchange.com/questions/19663/http-url-validating
 [8] https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/HEAD
 [9] http://docs.python-requests.org/
-
 """
 
 from __future__ import print_function
