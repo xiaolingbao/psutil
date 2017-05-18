@@ -183,7 +183,7 @@ psutil_proc_cpu_times(PyObject *self, PyObject *args) {
  */
 static PyObject *
 psutil_proc_cpu_num(PyObject *self, PyObject *args) {
-    int fd = NULL;
+    int fd = -1;
     int pid;
     char path[1000];
     struct prheader header;
@@ -248,7 +248,7 @@ psutil_proc_cpu_num(PyObject *self, PyObject *args) {
     return Py_BuildValue("i", proc_num);
 
 error:
-    if (fd != NULL)
+    if (fd != -1)
         close(fd);
     if (ptr != NULL)
         free(ptr);
