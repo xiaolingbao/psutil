@@ -336,6 +336,7 @@ psutil_proc_memory_maps(PyObject *self, PyObject *args) {
 
     err = task_for_pid(mach_task_self(), (pid_t)pid, &task);
     if (err != KERN_SUCCESS) {
+        printf("1\n");
         psutil_raise_for_pid(pid, "task_for_pid() failed");
         goto error;
     }
@@ -376,6 +377,7 @@ psutil_proc_memory_maps(PyObject *self, PyObject *args) {
             errno = 0;
             proc_regionfilename((pid_t)pid, address, buf, sizeof(buf));
             if ((errno != 0) || ((sizeof(buf)) <= 0)) {
+                printf("2\n");
                 psutil_raise_for_pid(
                     pid, "proc_regionfilename() syscall failed");
                 goto error;
