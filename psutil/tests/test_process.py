@@ -916,9 +916,13 @@ class TestProcess(unittest.TestCase):
         sproc = get_test_subprocess()
         p = psutil.Process(sproc.pid)
         invalid_cpu = [len(psutil.cpu_times(percpu=True)) + 10]
+        print(1)
         self.assertRaises(ValueError, p.cpu_affinity, invalid_cpu)
+        print(2)
         self.assertRaises(ValueError, p.cpu_affinity, range(10000, 11000))
+        print(3)
         self.assertRaises(TypeError, p.cpu_affinity, [0, "1"])
+        print(4)
         self.assertRaises(ValueError, p.cpu_affinity, [0, -1])
 
     @unittest.skipIf(not HAS_CPU_AFFINITY, 'not supported')
