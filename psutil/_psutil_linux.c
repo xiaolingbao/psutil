@@ -289,6 +289,7 @@ psutil_proc_cpu_affinity_get(PyObject *self, PyObject *args) {
     cpu_set_t *mask = NULL;
     PyObject *py_list = NULL;
 
+    printf("CPU_ALLOC\n");
     if (!PyArg_ParseTuple(args, "l", &pid))
         return NULL;
     ncpus = NCPUS_START;
@@ -356,6 +357,7 @@ psutil_proc_cpu_affinity_get(PyObject *self, PyObject *args) {
     PyObject* py_retlist = NULL;
     PyObject *py_cpu_num = NULL;
 
+    printf("not CPU_ALLOC\n");
     if (!PyArg_ParseTuple(args, "l", &pid))
         return NULL;
 	CPU_ZERO(&cpuset);
