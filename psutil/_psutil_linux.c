@@ -399,22 +399,29 @@ psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args) {
     PyObject *py_cpu_set;
     PyObject *py_cpu_seq = NULL;
 
+    printf("psutil_proc_cpu_affinity_set\n");
     if (!PyArg_ParseTuple(args, "lO", &pid, &py_cpu_set))
         return NULL;
 
     if (!PySequence_Check(py_cpu_set)) {
+        printf("PySequence_Check err\n");
         PyErr_Format(PyExc_TypeError, "sequence argument expected, got %s",
                      Py_TYPE(py_cpu_set)->tp_name);
         goto error;
     }
 
+    printf("before PySequence_Fast\n");
     py_cpu_seq = PySequence_Fast(py_cpu_set, "expected a sequence or integer");
     if (!py_cpu_seq)
         goto error;
+    printf("before PySequence_Fast_GET_SIZE\n");
     seq_len = PySequence_Fast_GET_SIZE(py_cpu_seq);
+    printf("before CPU_ZERO\n");
     CPU_ZERO(&cpu_set);
     for (i = 0; i < seq_len; i++) {
+        printf("before PySequence_Fast_GET_ITEM\n");
         PyObject *item = PySequence_Fast_GET_ITEM(py_cpu_seq, i);
+        printf("before PyLong_AsLong\n");
 #if PY_MAJOR_VERSION >= 3
         long value = PyLong_AsLong(item);
 #else
@@ -425,11 +432,13 @@ psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args) {
                 PyErr_SetString(PyExc_ValueError, "invalid CPU value");
             goto error;
         }
+        printf("before CPU_SET\n");
         CPU_SET(value, &cpu_set);
     }
 
 
     len = sizeof(cpu_set);
+    printf("before sched_setaffinity\n");
     if (sched_setaffinity(pid, len, &cpu_set)) {
         PyErr_SetFromErrno(PyExc_OSError);
         goto error;

@@ -6,6 +6,7 @@
 
 """Tests for psutil.Process class."""
 
+from __future__ import print_function
 import collections
 import errno
 import getpass
@@ -913,6 +914,7 @@ class TestProcess(unittest.TestCase):
 
     @unittest.skipIf(not HAS_CPU_AFFINITY, 'not supported')
     def test_cpu_affinity_errs(self):
+        print("inside")
         sproc = get_test_subprocess()
         p = psutil.Process(sproc.pid)
         print(0)
