@@ -915,6 +915,7 @@ class TestProcess(unittest.TestCase):
     def test_cpu_affinity_errs(self):
         sproc = get_test_subprocess()
         p = psutil.Process(sproc.pid)
+        print(0)
         invalid_cpu = [len(psutil.cpu_times(percpu=True)) + 10]
         print(1)
         self.assertRaises(ValueError, p.cpu_affinity, invalid_cpu)
