@@ -289,7 +289,6 @@ psutil_proc_cpu_affinity_get(PyObject *self, PyObject *args) {
     cpu_set_t *mask = NULL;
     PyObject *py_list = NULL;
 
-    printf("CPU_ALLOC\n");
     if (!PyArg_ParseTuple(args, "l", &pid))
         return NULL;
     ncpus = NCPUS_START;
@@ -357,7 +356,6 @@ psutil_proc_cpu_affinity_get(PyObject *self, PyObject *args) {
     PyObject* py_retlist = NULL;
     PyObject *py_cpu_num = NULL;
 
-    printf("not CPU_ALLOC\n");
     if (!PyArg_ParseTuple(args, "l", &pid))
         return NULL;
 	CPU_ZERO(&cpuset);
@@ -392,64 +390,93 @@ error:
  */
 static PyObject *
 psutil_proc_cpu_affinity_set(PyObject *self, PyObject *args) {
-    cpu_set_t cpu_set;
-    size_t len;
     long pid;
-    int i, seq_len;
-    PyObject *py_cpu_set;
-    PyObject *py_cpu_seq = NULL;
+    int ncpus;
+    long cpu;
+    size_t setsize;
+    cpu_set_t *cpu_set = NULL;
+    PyObject *iterator = NULL, *item;
+    PyObject *mask;
 
-    printf("psutil_proc_cpu_affinity_set\n");
-    if (!PyArg_ParseTuple(args, "lO", &pid, &py_cpu_set))
+    if (!PyArg_ParseTuple(args, "lO", &pid, &mask))
         return NULL;
 
-    if (!PySequence_Check(py_cpu_set)) {
-        printf("PySequence_Check err\n");
-        PyErr_Format(PyExc_TypeError, "sequence argument expected, got %s",
-                     Py_TYPE(py_cpu_set)->tp_name);
+    iterator = PyObject_GetIter(mask);
+    if (iterator == NULL)
+        return NULL;
+
+    ncpus = NCPUS_START;
+    setsize = CPU_ALLOC_SIZE(ncpus);
+    cpu_set = CPU_ALLOC(ncpus);
+    if (cpu_set == NULL) {
+        PyErr_NoMemory();
         goto error;
     }
+    CPU_ZERO_S(setsize, cpu_set);
 
-    printf("before PySequence_Fast\n");
-    py_cpu_seq = PySequence_Fast(py_cpu_set, "expected a sequence or integer");
-    if (!py_cpu_seq)
-        goto error;
-    printf("before PySequence_Fast_GET_SIZE\n");
-    seq_len = PySequence_Fast_GET_SIZE(py_cpu_seq);
-    printf("before CPU_ZERO\n");
-    CPU_ZERO(&cpu_set);
-    for (i = 0; i < seq_len; i++) {
-        printf("before PySequence_Fast_GET_ITEM\n");
-        PyObject *item = PySequence_Fast_GET_ITEM(py_cpu_seq, i);
-        printf("before PyLong_AsLong\n");
+    while ((item = PyIter_Next(iterator))) {
 #if PY_MAJOR_VERSION >= 3
-        long value = PyLong_AsLong(item);
+        if (!PyLong_Check(item)) {
 #else
-        long value = PyInt_AsLong(item);
+        if (!PyInt_Check(item)) {
 #endif
-        if ((value == -1) || PyErr_Occurred()) {
-            if (!PyErr_Occurred())
-                PyErr_SetString(PyExc_ValueError, "invalid CPU value");
+            PyErr_Format(
+                PyExc_TypeError,
+                "expected an iterator of ints but iterator yielded %s",
+                Py_TYPE(item)->tp_name);
+            Py_DECREF(item);
             goto error;
         }
-        printf("before CPU_SET\n");
-        CPU_SET(value, &cpu_set);
+        cpu = PyLong_AsLong(item);
+        Py_DECREF(item);
+        if (cpu < 0) {
+            if (!PyErr_Occurred())
+                PyErr_SetString(PyExc_ValueError, "negative CPU number");
+            goto error;
+        }
+        if (cpu > INT_MAX - 1) {
+            PyErr_SetString(PyExc_OverflowError, "CPU number too large");
+            goto error;
+        }
+        if (cpu >= ncpus) {
+            // Grow CPU mask to fit the CPU number.
+            int newncpus = ncpus;
+            cpu_set_t *newmask;
+            size_t newsetsize;
+            while (newncpus <= cpu) {
+                if (newncpus > INT_MAX / 2)
+                    newncpus = cpu + 1;
+                else
+                    newncpus = newncpus * 2;
+            }
+            newmask = CPU_ALLOC(newncpus);
+            if (newmask == NULL) {
+                PyErr_NoMemory();
+                goto error;
+            }
+            newsetsize = CPU_ALLOC_SIZE(newncpus);
+            CPU_ZERO_S(newsetsize, newmask);
+            memcpy(newmask, cpu_set, setsize);
+            CPU_FREE(cpu_set);
+            setsize = newsetsize;
+            cpu_set = newmask;
+            ncpus = newncpus;
+        }
+        CPU_SET_S(cpu, setsize, cpu_set);
     }
+    Py_CLEAR(iterator);
 
-
-    len = sizeof(cpu_set);
-    printf("before sched_setaffinity\n");
-    if (sched_setaffinity(pid, len, &cpu_set)) {
+    if (sched_setaffinity(pid, setsize, cpu_set)) {
         PyErr_SetFromErrno(PyExc_OSError);
         goto error;
     }
-
-    Py_DECREF(py_cpu_seq);
+    CPU_FREE(cpu_set);
     Py_RETURN_NONE;
 
 error:
-    if (py_cpu_seq != NULL)
-        Py_DECREF(py_cpu_seq);
+    if (cpu_set)
+        CPU_FREE(cpu_set);
+    Py_XDECREF(iterator);
     return NULL;
 }
 
